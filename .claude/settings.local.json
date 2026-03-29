@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx vitest:*)",
+      "Bash(br :*)",
+      "Bash(br list:*)",
+      "Bash(br show:*)",
+      "Bash(br create:*)",
+      "Bash(br update:*)",
+      "Bash(br dep:*)",
+      "Bash(br close:*)",
+      "Bash(br search:*)",
+      "Bash(br ready:*)",
+      "Bash(br --version)",
+      "Bash(python :*)",
+      "Bash(python3 :*)",
+      "Bash(glow :*)",
+      "Bash(ls :*)",
+      "WebSearch",
+      "Bash(rsvg-convert -w 512 -h 512 /tmp/discord-icon-radar.svg -o /tmp/discord-icon-radar.png)",
+      "Bash(rsvg-convert -w 512 -h 512 /tmp/discord-icon-briefcase.svg -o /tmp/discord-icon-briefcase.png)",
+      "Bash(rsvg-convert -w 512 -h 512 /tmp/discord-icon-compass.svg -o /tmp/discord-icon-compass.png)",
+      "Bash(ls -lh /tmp/discord-icon-*.png)",
+      "Bash(rsvg-convert:*)",
+      "WebFetch(domain:www.linkedin.com)",
+      "Bash(npx tsx:*)",
+      "Bash(npx dotenv:*)",
+      "Bash(source .env.local)",
+      "Skill(browse)",
+      "Bash(npx shadcn@latest add table --yes)",
+      "Bash(npm install:*)",
+      "Bash(sqlite3 jobs.db \"SELECT COUNT\\(*\\) FROM seen_jobs;\")",
+      "Bash(sqlite3 jobs.db \"SELECT title FROM seen_jobs ORDER BY date_found DESC;\")",
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

@@ -1,0 +1,72 @@
+# Job Agent — Resume/Cover Letter Tailoring Prompt Templates
+# Used by tailor.py to generate personalized application documents.
+
+# Pass 1: Analyze the job description
+analyze: |
+  Analyze this job description. Return JSON only.
+
+  {{job_description}}
+
+  {
+    "role_title": "exact job title",
+    "company": "company name",
+    "company_slug": "lowercase-hyphenated for filenames",
+    "must_have": ["3-5 required quals"],
+    "nice_to_have": ["2-3 preferred quals"],
+    "ats_keywords": ["12-15 keywords to include"],
+    "tone": "formal | startup | technical",
+    "seniority_level": "IC | manager | director | VP"
+  }
+
+# Pass 2: Match candidate experience to job requirements
+match: |
+  Match the candidate's experience to this job. Only use facts from the profile.
+
+  Profile:
+  {{profile_yaml}}
+
+  Role: {{role_title}} at {{company}}
+  Must have: {{must_have}}
+  ATS keywords: {{ats_keywords}}
+
+  Return JSON only:
+  {
+    "lead_experience": "which role/project best fits and why",
+    "cover_letter_angle": "one specific story or achievement that best fits this role",
+    "gaps": [{"gap": "requirement", "talking_point": "how to address it"}]
+  }
+
+# Pass 3: Generate structured content
+generate: |
+  Generate a tailored application for {{name}} applying to {{role_title}} at {{company}}.
+
+  RULES:
+  - Only use real experience from the profile. Never fabricate metrics or responsibilities.
+  - Tailor bullet emphasis and ordering for relevance to this specific role.
+  - Cover letter: 3 tight paragraphs, lead with specific impact, connect to company mission.
+  - Voice: {{voice}}
+  - No em dashes anywhere. Use commas or periods instead.
+  - Paragraph 3 must include a logistics line (location, availability, eager to connect).
+  {{custom_instructions}}
+
+  Context: {{analysis}}
+  Matching: {{matching}}
+  Profile:
+  {{profile_summary}}
+
+  Return JSON only:
+  {
+    "headline": "tailored one-line resume tagline",
+    "resume_emphasis": {
+      "lead_with": "which experience section to feature first",
+      "bullet_order": ["ordered list of most relevant bullets from profile"],
+      "skills_highlight": ["top 8-10 skills to emphasize for this role"]
+    },
+    "cover_letter": {
+      "date": "{{today}}",
+      "paragraph_1": "...",
+      "paragraph_2": "...",
+      "paragraph_3": "..."
+    },
+    "gaps": [{"gap": "...", "talking_point": "..."}]
+  }

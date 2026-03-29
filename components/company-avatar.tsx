@@ -44,7 +44,7 @@ export function CompanyAvatar({ company, size = "sm", className }: CompanyAvatar
   if (!logoFailed) {
     return (
       <img
-        src={`https://logo.clearbit.com/${domain}`}
+        src={`https://img.logo.dev/${domain}?token=pk_anonymous&format=png&size=64`}
         alt={company}
         onError={() => setLogoFailed(true)}
         className={cn(sizeClass, "object-contain bg-white p-0.5 shrink-0", className)}

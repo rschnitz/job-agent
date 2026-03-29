@@ -1,0 +1,145 @@
+# Job Agent — Scoring Configuration
+# Deterministic scoring engine. No LLM involved.
+# Score range: 0-100 (capped). Higher = better fit.
+
+# Compensation baseline for scoring
+compensation:
+  baseline: 200000
+  # Adjustments applied to reported comp before comparing to baseline
+  bonus_discount: 0.80        # bonuses worth 20% of face value
+  equity_discount_by_stage:
+    public: 0.30
+    late_stage: 0.40
+    growth: 0.50
+    early_stage: 0.70
+  commute_penalty_per_year: 2500  # for South Bay / Peninsula roles
+
+# Role type scoring
+role_type:
+  "engineering manager": 20
+  "senior engineering manager": 15
+  "director of engineering": 15
+  "head of engineering": 10
+  "vp of engineering": 10
+  "staff engineer": 10
+  "principal engineer": 10
+  "senior staff engineer": 10
+  "other": -5
+
+# Domain bonuses (additive, max one)
+domain:
+  fintech: 10
+  financial_services: 10
+  banking: 8
+  authentication: 10
+  identity: 8
+  security: 5
+  ai: 8
+  ml: 5
+  platform: 8
+  infrastructure: 5
+  developer_tools: 8
+  developer_experience: 8
+
+# Company tier bonuses
+company_tiers:
+  tier1: 20   # dream companies
+  tier2: 10   # strong interest
+  tier3: 5    # good companies
+  default: 0
+
+# Company lists (lowercase)
+companies:
+  tier1:
+    - anthropic
+    - stripe
+    - plaid
+    - perplexity
+
+  tier2:
+    - databricks
+    - snowflake
+    - rippling
+    - doordash
+    - figma
+    - notion
+    - linear
+    - vercel
+    - cloudflare
+    - hashicorp
+    - confluent
+    - netflix
+    - scale ai
+    - cohere
+
+  tier3:
+    - okta
+    - hubspot
+    - twilio
+    - crowdstrike
+    - palo alto networks
+    - zscaler
+    - datadog
+    - mongodb
+    - elastic
+    - everlaw
+    - brex
+    - chime
+    - adobe
+    - salesforce
+    - google
+    - microsoft
+    - amazon
+    - meta
+    - apple
+
+# Location scoring
+location:
+  "san francisco": 10
+  "oakland": 10
+  "piedmont": 10
+  "berkeley": 10
+  "emeryville": 10
+  "remote": 10
+  "hybrid": 5
+  "south bay": -5
+  "san jose": -5
+  "sunnyvale": -5
+  "mountain view": -5
+  "palo alto": -5
+  "menlo park": -5
+  "redwood city": -3
+  "cupertino": -5
+  # Anything not listed: 0
+
+# Keyword bonuses (found in title or description)
+keyword_bonuses:
+  "authentication": 5
+  "identity": 5
+  "fraud": 5
+  "platform": 3
+  "api": 3
+  "microservices": 3
+  "cloud-native": 3
+  "spring boot": 3
+  "fintech": 5
+
+# Keyword penalties
+keyword_penalties:
+  "data engineer": -15
+  "machine learning engineer": -10
+  "hardware": -10
+  "embedded": -10
+  "firmware": -10
+  "mechanical": -15
+  "civil": -15
+  "nurse": -20
+  "physician": -20
+
+# Threshold for engaging Claude (start low, tighten over time)
+# Jobs scoring below this are rejected by code alone.
+# Jobs scoring at or above are sent to Claude for final judgment.
+claude_threshold: 15
+
+# Minimum score to alert (after both code + Claude scoring)
+alert_threshold: 40

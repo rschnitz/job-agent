@@ -15,6 +15,21 @@ export async function POST(req: NextRequest) {
   }
 
   const db = createServiceClient();
+
+  // Deduplicate by URL if provided
+  if (url) {
+    const { data: existing } = await db
+      .from("jobs")
+      .select("id")
+      .eq("url", url)
+      .limit(1)
+      .single();
+
+    if (existing) {
+      return NextResponse.json({ id: existing.id, deduplicated: true }, { status: 200 });
+    }
+  }
+
   const { data, error } = await db
     .from("jobs")
     .insert({ title, company, url: url ?? null, description: description ?? null, source: source ?? null, status: "new" })

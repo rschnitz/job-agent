@@ -253,10 +253,12 @@ export default function JobBoard() {
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        deleteJob(job.id);
+                        if (confirm(`Delete "${job.title}" at ${job.company}? This is permanent.`)) {
+                          deleteJob(job.id);
+                        }
                       }}
                       className="absolute top-1.5 right-1.5 h-4 w-4 rounded flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
-                      title="Remove job"
+                      title="Delete job permanently"
                     >
                       <X className="h-3 w-3" />
                     </button>

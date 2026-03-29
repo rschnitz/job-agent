@@ -1,110 +1,130 @@
 personal:
-  name: Josh Sachs
-  email: joshs15260@gmail.com
-  phone: (510) 517-1526
-  location: Oakland / Santa Cruz, CA
-  linkedin: linkedin.com/in/josh-sachs
-  headline: Aspiring Sales Engineer combining technical fluency with client-facing communication experience
+  name: Ray Schnitzler
+  email: ray.schnitzler@gmail.com
+  phone: "510-710-9223"
+  location: Piedmont, CA
+  linkedin: linkedin.com/in/ray-schnitzler
+  headline: I help engineering teams deliver production systems companies can rely on.
 
 education:
-  - institution: University of California, Santa Cruz
-    degree: Bachelor of Arts (B.A.) in Computer Science
-    dates: Sep 2022 - Jun 2026 (Expected)
-    location: Santa Cruz, CA
-    coursework:
-      - Data Structures
-      - Systems Design
-      - Databases
+  - institution: MIT
+    degree: MS, BS; Computer Science and Electrical Engineering
+    gpa: "4.9/5.0"
+    thesis: "New Family of Numerical Integration Algorithms Providing Increased Prediction Accuracy"
+    honors:
+      - Tau Beta Pi
+      - Eta Kappa Nu
+      - Sigma Xi
 
 skills:
-  technical:
+  languages:
+    - Java
     - Python
-    - C
+    - Shell
     - C++
-    - JavaScript
-    - Zapier
-    - RealScout
-    - Follow Up Boss (CRM)
-    - Google Sheets API
-    - Gmail API
-    - Google Suite
-    - Adobe Suite
-  core:
-    - Workflow Automation
-    - Data Structures
-    - Basic Machine Learning
-    - Problem Solving
+  architecture:
+    - Distributed systems
+    - Microservices
+    - System architecture
+    - API platforms
+    - Authentication systems
+    - Observability
+    - Reliability engineering
+  platforms:
+    - Spring Boot
+    - REST APIs
+    - PostgreSQL
+    - MongoDB
+    - Redis
+    - Kafka
+    - GitHub
+  practices:
+    - CI/CD pipelines
+    - Automated testing
+    - Code generation
+    - Developer productivity tooling
+  ai_modern:
+    - LLM integration
+    - AI platform architecture
+    - Data pipelines
   soft:
-    - Leadership
+    - Team Leadership (built teams from 0 to 20+ more than once)
+    - Engineering Mentorship & Coaching
+    - Cross-functional Collaboration
+    - Project Management
     - Public Speaking
-    - Adaptability
-    - Team Development
-    - Cold Calling
-    - Client-facing Communication
-    - Demo Scheduling
-    - Sales Prospecting
+    - Developer Experience
 
 experience:
-  - title: Workflow & Automation Intern, Engineer
-    company: Cush Real Estate
-    location: Oakland, CA
-    dates: Jun 2025 - Present
+  - title: Principal Engineer
+    company: Lexicon Branding
+    location: Sausalito, CA
+    dates: 2025-Present
+    context: "Global naming firm whose work includes products such as Pentium, PowerBook, Swiffer, and Sonos."
     bullets:
-      - "Automated lead routing for 10+ agents using Zapier, RealScout, and Follow Up Boss, cutting processing time by 90%"
-      - "Implemented Python tool to synchronize local realtor data, by region, into Google Sheets, enabling streamlined outreach and simplifying reporting"
-      - "Built three-stage Action Plan workflow, improving pipeline visibility, raising follow-up compliance by 35%"
-      - "Authored daily analytics briefs for founders, translating technical sales metrics into actionable business recommendations to cut operating costs"
-      - "Hired as Automation Engineer following successful internship"
-      - "Led RealScout platform transition -- evaluated, recommended, and onboarded 10+ agents"
+      - "Led architecture and delivery of a production AI platform translating decades of proprietary research and a corpus of over half a million evaluated candidate names into structured naming analysis used directly in client engagements"
+      - "Designed full-stack system architecture (Next.js, Supabase/PostgreSQL, LLM workflows) supporting structured search, linguistic analysis, and automated report generation"
+      - "Defined function-calling framework integrating research literature, linguistic evaluation, and outcome data into consistent analytical outputs, and led platform planning including specifications, roadmap, and cost modeling"
+      - "Integrated existing Python desktop application into the cloud platform, modernizing the codebase and resolving long-standing packaging and deployment constraints"
+
+  - title: Principal Engineer
+    company: schnitz.org (Independent)
+    location: SF Bay Area, CA
+    dates: 2024-Present
+    context: "Independent engineering and platform architecture work helping companies improve delivery discipline and turn research or legacy software into reliable production systems."
+    clients:
+      - name: Generous Energy
+        bullets:
+          - "Established engineering operations for an ML-driven electricity trading firm, including CI/CD practices, development workflows, documentation standards, and production readiness for ERCOT day-ahead and real-time market participation"
+      - name: ShockProof! Training
+        bullets:
+          - "Defined system architecture for an AI-enabled workflow platform supporting transition from training services to subscription-based automation"
+      - name: CarMagic
+        bullets:
+          - "Designed phased migration strategy for legacy platform, projecting significant infrastructure cost reduction and improved scalability"
+
+  - title: Lead (2004-15), Engineering Manager (2015-25)
+    company: Wells Fargo Bank
+    location: San Francisco, CA
+    dates: 2004-2025
+    bullets:
+      - "Led platform refactor and engineering tooling initiatives that increased developer productivity by 25%, improving delivery speed and system maintainability"
+      - "Owned development of two enterprise platforms: an authentication system securing tens of millions of daily users and a secure customer messaging platform used in high-volume customer workflows"
+      - "Delivered over $2M in annual fraud savings in one initiative, with additional risk reduction through integration of authentication, device intelligence, and analytics"
+      - "Introduced automated code generation, static analysis, mutation testing, and quality gating pipelines, strengthening engineering discipline and reducing operational risk"
+      - "Built engineering teams from zero to 20+, mentoring engineers into senior and leadership roles while establishing strong delivery ownership and reliability"
+      - "Platforms built primarily in Java/Spring Boot with MongoDB and distributed components, designed for high availability, observability, and secure enterprise integration"
     key_metrics:
-      - "90% reduction in lead routing processing time"
-      - "35% improvement in follow-up compliance"
-      - "10+ agents onboarded to new platform"
-    narrative: "Was on the buying side of a sales engineer interaction during the RealScout evaluation and it made me want to do this full-time"
+      - "Built teams from 0 to 20+"
+      - "$2M+ annual fraud savings"
+      - "25% developer productivity increase"
+      - "Tens of millions of daily users"
 
-  - title: Sales Engineering Intern
-    company: Shockproof
-    location: Remote
-    dates: May 2025 - Present
+  - title: Director of Software Development
+    company: Round1
+    location: San Francisco, CA
     bullets:
-      - "Built automation sending 50 targeted outreach emails a day from a 3000+ contact list, improving outreach efficiency by 80%, using Python, JavaScript, Google Sheets and Gmail APIs"
-      - "Implemented task scheduler, triggering emails and validating successful operation"
-      - "Managed client demo scheduling via Google Sheets, ensuring coordination between sales and technical teams"
-      - "Navigated complex org structures at banks to reach decision-makers"
-      - "Conducted cold calling outreach as part of sales prospecting workflow"
-    key_metrics:
-      - "50 targeted emails per day"
-      - "3000+ contact list"
-      - "80% improvement in outreach efficiency"
+      - "Built and led engineering teams for a full-stack web-based fintech platform serving institutional investors and private companies"
+      - "Developed algorithmic auction system for private equity share allocation and investor selection; filed U.S. and international patent applications"
 
-leadership:
-  - title: Vice President of Member Integration
-    organization: Alpha Kappa Psi, Chi Gamma Chapter
-    location: Santa Cruz, CA
-    dates: Jun 2025 - Nov 2025
+  - title: Senior Engineer
+    company: Samsung Advanced Media Laboratory
+    location: Lawrenceville, NJ
     bullets:
-      - "Led a 16-member initiate class that raised $6.5K in under 7 weeks through coordinated fundraising events"
-      - "Ran a 7-week professional development program with alumni workshops, interview preparation, and weekly accountability checkpoints"
+      - "Developed advanced video algorithms and simulation system, earning multiple U.S. and international patents through innovations in convolution and multidimensional Fast Fourier transforms"
+      - "Reduced product development cycles by six months"
 
-  - title: Conservationist
-    organization: Operation Wallacea
-    location: Fiji
-    dates: Jun 2022 - Jul 2022
+  - title: Earlier Roles
     bullets:
-      - "Collected data for AI model linking satellite imagery with on-site biomass measurements and endangered-species observations to estimate carbon sequestration for governmental policy-making on environment and land-use"
-
-  - title: Team Leader
-    organization: Amor Ministries
-    location: Mexico
-    dates: Dec 2021 - Apr 2022
-    bullets:
-      - "Led a 10-person student team building housing for an under-resourced family and managed on-site logistics"
+      - "Advised high-frequency trading firm on development management, hiring frameworks, and engineering process maturity"
+      - "Built real-time visual inspection system, combining custom hardware and image-processing software, preventing multi-million-dollar production errors"
+      - "Led development of healthcare and enterprise systems including EHR integrations and data platforms, reducing billing costs by ~90%"
 
 cover_letter_style:
   strengths:
-    - Story-led openings work best
-    - Lead with genuine company interest specific to that company
-    - Strong closer with logistics line
-    - Personal and specific beats formulaic every time
-  key_narrative: "I have been on the buying side of a sales engineer interaction (RealScout evaluation) and it made me want to do this full-time"
-  voice: "Direct, enthusiastic, technically literate but people-first. No corporate fluff."
+    - Lead with specific, measurable impact
+    - Connect technical depth to business outcomes
+    - Show people development philosophy concretely
+    - Close with logistics and genuine interest
+  key_narrative: "I help engineering teams deliver production systems companies can rely on. I've built teams from zero to 20+ more than once and led delivery of platforms that matter to the business, from production AI systems to enterprise authentication infrastructure at global scale."
+  voice: "Direct, substantive, technically confident but people-focused. No corporate fluff. Lead with specific impact, not generic enthusiasm."

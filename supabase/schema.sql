@@ -36,25 +36,29 @@ alter table conversations disable row level security;
 -- Seed default profile (upsert so re-running schema is safe)
 insert into profiles (id, resume_text, skills, preferences) values (
   '00000000-0000-0000-0000-000000000001',
-  'UC Santa Cruz, 4th year CS major (B.A.), graduating June 2026.
+  'MIT BS/MS Computer Science and Electrical Engineering.
 
 Experience:
-- Automation Engineer, Cush Real Estate (Jun 2025–present)
-  Led RealScout CRM platform transition and onboarded 10+ agents. Automated lead routing (90% time reduction). Built follow-up workflow that increased agent compliance by 35%. Deliver daily analytics briefs to founders translating metrics into business recommendations.
+- Engineering Manager, Wells Fargo Bank, San Francisco (2004-2025)
+  Envisioned and led AuthHub, cloud-native enterprise authentication platform. Scaled teams 0→20+. $2MM+ annual fraud savings. 25% per-project cost reduction via data-driven engineering. Created code generation tools and quality pipelines (SonarQube, mutation testing).
 
-- Sales Engineering Intern, Shockproof (May 2025)
-  Built 50-email/day outreach automation from 3,000+ contact list. Navigated complex org structures at banks to reach decision-makers. Cold calling experience.
+- Consulting Principal Engineer, Lexicon Branding / ShockProof / CarMagic (2025-present)
+  Platform modernization, AI-enhanced tools, architectural evaluation.
 
-Leadership:
-- Executive Vice President, Alpha Kappa Psi (AKPsi), Chi Gamma Chapter — current. Previously VP of Member Integration.
+- Director of Software Development, Round1, San Francisco
+  Fintech platform for institutional investors. International patent filed.
 
-Key narrative: "I have been on the buying side of a sales engineer interaction. I evaluated RealScout, recommended it to leadership, and led the full rollout for 10+ agents. That experience made me want to do this full-time."',
+- Senior Engineer, Samsung Advanced Media Laboratory
+  11 US patents. Simulation platform reducing dev cycles by 6 months.
 
-  'Sales outreach automation, CRM platforms (RealScout, HubSpot), workflow automation, B2B prospecting, cold calling, technical demos, Python, JavaScript/TypeScript, Next.js, Supabase, Claude API, data analysis, translating technical concepts for non-technical buyers',
+Key narrative: "I develop whole engineers who take ownership beyond code — engineers who lead projects, mentor others, drive quality improvements, and own their systems in production."',
 
-  'Target roles: SDR, BDR, Sales Engineering, Solutions Engineering, Account Executive (entry), GTM roles at AI/automation/SaaS companies.
-Location: SF Bay Area — East Bay and Santa Cruz base. Happy to be in-person in SF.
-Target comp: $70–90k base with clear path to $100k+.
-Industry preference: AI, automation, real estate tech, SaaS.
-Cover letter style: Story-driven, leads with genuine company interest. Strong closer with a logistics/availability line. Best when it tells a specific story rather than listing accomplishments formulaically.'
+  'Java, Python, Shell scripting, C++, SpringBoot, OpenShift, RESTful APIs, MongoDB, Microservices, CI/CD, OAuth/JWT, API Design, Integration Architecture, Cloud-native Platforms, Authentication/Identity Systems, Fraud Detection, SonarQube, Mutation Testing, Code Generation, Data Warehouses & Analytics',
+
+  'Target roles: Engineering Manager, Senior EM, Director of Engineering, Head of Engineering.
+Location: Piedmont/Bay Area — SF, Oakland, Berkeley preferred. Remote OK. South Bay acceptable.
+Target comp: $200k+ total compensation baseline.
+Industries: Fintech, authentication/identity, platform engineering, AI/ML, developer tools.
+Values: Meaningful mission, strong people development culture, collaborative technical decision-making.
+Cover letter style: Direct, substantive, technically confident but people-focused. Lead with specific impact, not generic enthusiasm.'
 ) on conflict (id) do nothing;

@@ -12,3 +12,6 @@ __pycache__/
 job-scout/venv/
 job-scout/.env
 job-scout/*.db
+job-scout/logs/
+job-scout/.venv/
+job-scout/output/

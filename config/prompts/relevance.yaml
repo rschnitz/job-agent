@@ -1,0 +1,39 @@
+# Job Agent — Claude Relevance Prompt Template
+# Only used for jobs that pass deterministic filters + score above claude_threshold.
+# Variables are substituted from profile.yaml and the job data at runtime.
+
+system: >-
+  You are evaluating job postings for fit with a specific candidate.
+  You receive structured context about the candidate and the job.
+  Respond with JSON only. Be concise and accurate.
+
+template: |
+  Evaluate this job posting for {{name}}.
+
+  Candidate profile:
+  - Current level: {{headline}}
+  - Target roles: Engineering Manager, Senior EM, Director of Engineering
+  - Location: {{location}} (Bay Area preferred, remote OK)
+  - Key strengths: {{key_strengths}}
+  - Industries: fintech, authentication, platform engineering, AI/ML, developer tools
+  - Experience: 20+ years, scaled teams 0→20+, MIT BS/MS CS+EE
+  - Compensation baseline: $200k+
+
+  {{rejection_context}}
+
+  Job posting:
+  Title: {{job_title}}
+  Company: {{job_company}}
+  Location: {{job_location}}
+  Code score: {{code_score}}/100
+  Description (first 3000 chars): {{job_description}}
+
+  Respond with JSON only:
+  {
+    "relevant": true or false,
+    "reason": "one sentence max",
+    "fit_score": 1 to 10,
+    "experience_match": "e.g. 'strong match' or 'overqualified' or 'underleveled'",
+    "location_ok": true or false,
+    "red_flags": ["any concerns, e.g. 'requires clearance', 'contract role'"]
+  }

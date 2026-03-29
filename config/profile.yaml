@@ -1,0 +1,167 @@
+# Job Agent — User Profile
+# This file drives resume tailoring, cover letter generation, and AI chat context.
+# LLM-drafted from resume; edit freely — the system reads this, not the LLM.
+
+personal:
+  name: Ray Schnitzler
+  email: ray.schnitzler@gmail.com
+  phone: "510-710-9223"
+  location: Piedmont, CA
+  linkedin: linkedin.com/in/ray-schnitzler
+
+headline: I help engineering teams deliver production systems companies can rely on.
+
+education:
+  - institution: MIT
+    degree: BS/MS Computer Science and Electrical Engineering
+    thesis: "New Family of Numerical Integration Algorithms Providing Increased Prediction Accuracy"
+    honors:
+      - Tau Beta Pi (Engineering Honor Society)
+      - Eta Kappa Nu (IEEE EE/CS Honor Society)
+      - Sigma Xi (International Research Honor Society)
+
+skills:
+  languages:
+    - Java
+    - Python
+    - Shell
+    - C++
+  architecture:
+    - Distributed systems
+    - Microservices
+    - System architecture
+    - API platforms
+    - Authentication systems
+    - Observability
+    - Reliability engineering
+  platforms:
+    - Spring Boot
+    - REST APIs
+    - PostgreSQL
+    - MongoDB
+    - Redis
+    - Kafka
+    - GitHub
+  practices:
+    - CI/CD pipelines
+    - Automated testing
+    - Code generation
+    - Developer productivity tooling
+  ai_modern:
+    - LLM integration
+    - AI platform architecture
+    - Data pipelines
+  industries:
+    - Fintech / Financial Services
+    - Authentication / Identity
+    - AI / ML Systems
+    - Enterprise Platforms
+    - Energy Trading
+  soft_skills:
+    - Team Leadership (built teams 0→20+ multiple times)
+    - Engineering Mentorship
+    - Technical Coaching
+    - Cross-functional Collaboration
+    - Project Management
+    - Public Speaking
+    - Developer Experience
+
+experience:
+  - title: Consulting Principal Engineer
+    company: Lexicon Branding
+    location: Sausalito, CA
+    dates: 2025-Present
+    bullets:
+      - "Resolved longstanding MacOS application packaging issue"
+      - "Advising on reliability and functionality enhancements, including appropriate use of AI tools"
+
+  - title: Engineering Manager
+    company: Wells Fargo Bank
+    location: San Francisco, CA
+    dates: 2004-2025
+    key_metrics:
+      - "Scaled teams 0 to 20+"
+      - "$2MM+ annual fraud savings (one project alone)"
+      - "25% per-project cost reduction"
+    bullets:
+      - "Envisioned and led development of AuthHub, cloud-native enterprise authentication platform and API framework, built with Spring-Boot microservices and MongoDB-backed distributed caching"
+      - "Scaled diverse engineering teams from 0 to 20, cultivating a culture of reliable, high-quality software delivery and architectural rigor"
+      - "Owned end-to-end technical vision, architecture, and delivery of multifactor authentication, biometric flows, device intelligence, and session orchestration services"
+      - "Produced over $2MM in annual fraud savings in one recent project alone"
+      - "Redesigned online messaging system: 25% per-project cost reduction using data-driven engineering techniques"
+      - "Created code generation tools and introduced code analysis pipelines (SonarQube, mutation testing, quality gating)"
+      - "Built systems integrating with data warehouses for fraud investigation and analytics"
+      - "Coached and mentored engineers in software architecture, quality practices, on-call excellence, and technical leadership"
+
+  - title: Consulting Principal Engineer
+    company: ShockProof! Training
+    location: Walnut Creek, CA
+    dates: 2025-Present
+    bullets:
+      - "Advised leadership on updating legacy training platform to support scalable delivery and integration"
+      - "Provided technical guidance on platform evolution, including AI-enhanced tools for document analysis in commercial lending contexts"
+
+  - title: Consulting Principal Engineer
+    company: CarMagic
+    location: Moraga, CA
+    dates: 2025-Present
+    bullets:
+      - "Evaluated Elixir/Phoenix platform, identifying architectural and hiring constraints with potential for 20-30% cost reduction"
+      - "Delivered Keep vs Refactor decision model, phased migration roadmap, and supporting planning documents"
+
+  - title: Director of Software Development
+    company: Round1
+    location: San Francisco, CA
+    bullets:
+      - "Built and led engineering teams for a fintech platform serving institutional investors and private companies"
+      - "Led design and delivery of backend services for complex workflows: private capital transactions, investor analysis, capitalization tracking"
+      - "International patent filed"
+
+  - title: Senior Engineer
+    company: Samsung Advanced Media Laboratory
+    location: Lawrenceville, NJ
+    bullets:
+      - "Developed advanced video algorithms and simulation system, earning eleven US patents and numerous international patents"
+      - "Created simulation platform enabling systematic evaluation of hundreds of design variants, reducing product development cycles by six months"
+
+  - title: Development Manager
+    company: DDRnet
+    location: San Mateo, CA
+    bullets:
+      - "Led US and offshore development teams delivering online dental claims processing service"
+
+  - title: Senior Engineer/Architect
+    company: CBCA
+    location: Oakland, CA
+    bullets:
+      - "Designed and implemented claims adjudication and workflow systems for healthcare administration"
+
+cover_letter_style:
+  voice: >-
+    Direct, substantive, technically confident but people-focused.
+    No corporate fluff. Lead with specific impact, not generic enthusiasm.
+  key_narratives:
+    - "Grew teams from 0 to 20+ engineers who take ownership beyond code"
+    - "Built Wells Fargo's cloud-native authentication platform from scratch"
+    - "$2MM+ fraud savings from a single project"
+    - "MIT background applied to practical engineering leadership"
+    - "Developing 'whole engineers' — people who own systems end-to-end"
+  strengths:
+    - Lead with specific, measurable impact
+    - Connect technical depth to business outcomes
+    - Show people development philosophy concretely
+    - Close with logistics and genuine interest
+  what_matters:
+    - Meaningful mission
+    - Strong people development culture
+    - Collaborative technical decision-making
+    - Engineers who take ownership beyond code
+
+# Values statement (used for AI chat context and fit assessment)
+values: >-
+  Looking for a place where I can contribute to a meaningful mission,
+  where people care about mission and culture. Want to continue developing
+  engineers who take ownership beyond just writing code. Looking for a culture
+  where engineers and management collaborate on infrastructure priorities,
+  where technical teams can propose quality improvements based on what they
+  see day-to-day, and leadership supports those initiatives.

@@ -27,84 +27,61 @@ INGEST_URL = os.getenv("INGEST_URL", "https://job-agent-henna.vercel.app/api/job
 INGEST_API_KEY = os.getenv("INGEST_API_KEY")
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jobs.db")
 
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "scraper.log")
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 logging.basicConfig(
-    filename="/var/log/jobscraper.log",
+    filename=LOG_PATH,
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
     datefmt="%Y-%m-%d %I:%M:%S %p"
 )
 
-# Search terms -- kept broad, Claude handles level filtering
+# Search terms -- kept focused on EM/Director roles
 SEARCH_TERMS = [
-    "Sales Development Representative",
-    "Business Development Representative",
-    "SDR tech",
-    "BDR SaaS",
-    "Sales Engineer entry level",
-    "Solutions Engineer entry level",
-    "Account Development Representative",
-    "Technical Sales Associate",
-    "Account Executive entry level",
-    "Go To Market entry level",
+    "Engineering Manager",
+    "Senior Engineering Manager",
+    "Director of Engineering",
+    "Head of Engineering",
+    "VP Engineering",
+    "Engineering Manager fintech",
+    "Engineering Manager platform",
+    "Engineering Manager authentication",
+    "Engineering Manager AI",
+    "Engineering Manager developer tools",
+    "Principal Engineer", "Principal Software Engineer",
+    "Senior Staff Engineer", "Senior Staff Software Engineer",
+    "Staff Engineer", "Staff Software Engineer",
 ]
 
-INTERN_SEARCH_TERMS = [
-    "Sales intern tech",
-    "Business Development intern",
-    "Sales Engineering intern",
-    "GTM intern",
-    "Go to market intern",
-]
+# No intern or comms searches for this profile
+INTERN_SEARCH_TERMS = []
+PROMPT_ENG_SEARCH_TERMS = []
+COMMS_SEARCH_TERMS = []
 
-PROMPT_ENG_SEARCH_TERMS = [
-    "Prompt Engineer",
-    "Prompt Engineer entry level",
-    "AI Engineer entry level",
-    "LLM Engineer entry level",
-    "AI Automation Engineer",
-    "Generative AI Engineer entry level",
-]
-
-COMMS_SEARCH_TERMS = [
-    "Developer Advocate entry level",
-    "Developer Relations entry level",
-    "Developer Evangelist entry level",
-    "Marketing Communications entry level tech",
-    "Community Manager tech",
-    "Content Marketing entry level SaaS",
-    "Technical Community Manager",
-]
-
-HIGH_CONVERSION_COMPANIES = [
-    "salesforce", "google", "microsoft", "amazon", "meta", "stripe",
-    "databricks", "snowflake", "okta", "hubspot", "zendesk", "twilio",
-    "box", "dropbox", "workday", "servicenow", "splunk", "crowdstrike",
-    "palo alto networks", "zscaler", "cloudflare", "hashicorp", "confluent",
-    "figma", "notion", "anthropic", "openai", "nvidia", "netflix",
-    "adobe", "intuit", "cisco", "oracle", "mongodb", "elastic",
-    "datadog", "new relic", "sigma computing",
-]
+HIGH_CONVERSION_COMPANIES = []  # Not used for this profile
 
 LOCATIONS = [
     "San Francisco, CA",
     "Oakland, CA",
-    "San Jose, CA",
-    "Redwood City, CA",
-    "Menlo Park, CA",
+    "Berkeley, CA",
 ]
 
 WATCHLIST_COMPANIES = [
-    "netflix", "anthropic", "openai", "nvidia", "databricks", "snowflake",
-    "salesforce", "stripe", "figma", "notion", "palantir", "scale ai",
-    "cohere", "mistral", "groq", "together ai", "perplexity", "cursor",
-    "linear", "vercel", "cloudflare", "hashicorp", "confluent",
-    "sigma computing",
+    "anthropic", "nvidia", "openai", "stripe", "plaid", "perplexity",
+    "playstation", "sony", "sony interactive entertainment",
+    "splunk", "cisco", "thousandeyes",
+    "apple", "meta", "wealthfront",
+    "lendingclub", "ratiotech", "redfin", "zillow",
+    "postman", "quizlet", "semgrep",
+    "databricks", "snowflake", "rippling", "doordash",
+    "figma", "notion", "linear", "vercel", "cloudflare",
+    "hashicorp", "confluent", "netflix", "scale ai", "cohere",
 ]
 
 EXCLUDE_INDUSTRIES = [
     "hospital", "clinic", "insurance", "legal",
     "law firm", "pharmaceutical", "pharma", "dental", "therapy", "staffing",
-    "recruiting agency", "we are hiring on behalf",
+    "recruiting agency", "we are hiring on behalf", "blockchain",
 ]
 
 REPOST_SIGNALS = [
@@ -113,16 +90,21 @@ REPOST_SIGNALS = [
     "reactivated", "re-listed", "relisted", "re-opening",
 ]
 
-NONSALES_TITLES = [
-    "software engineer", "data engineer", "mechanical engineer",
-    "electrical engineer", "hardware engineer", "systems engineer",
+EXCLUDED_TITLES = [
+    "software engineer", "data engineer", "data scientist",
+    "machine learning engineer", "mechanical engineer",
+    "electrical engineer", "hardware engineer",
     "civil engineer", "structural engineer", "chemical engineer",
     "nurse", "physician", "therapist", "dentist", "teacher",
     "scientist", "researcher", "accountant",
-    "attorney", "paralegal", "park technician", "swim coach",
-    "manufacturing engineer", "controls engineer", "field service",
-    "penetration tester", "cybersecurity analyst",
+    "attorney", "paralegal", "intern",
+    "associate engineer", "junior engineer", "entry level",
+    "new grad", "manufacturing engineer", "controls engineer",
+    "sales development", "business development representative",
+    "sdr", "bdr", "account executive entry",
+    "sales representative", "sales associate",
 ]
+
 
 
 def init_db():
@@ -220,14 +202,14 @@ def quick_filter(job):
 
     if any(term in title_company for term in EXCLUDE_INDUSTRIES):
         return False, "excluded industry"
-    if any(t in title for t in NONSALES_TITLES):
-        return False, "non-sales title"
+    if any(t in title for t in EXCLUDED_TITLES):
+        return False, "excluded title"
 
     min_sal = job.get("min_amount")
     max_sal = job.get("max_amount")
     if min_sal and max_sal:
         try:
-            if float(max_sal) < 40000:
+            if float(max_sal) < 150000:
                 return False, f"salary too low: {max_sal}"
         except (ValueError, TypeError):
             pass
@@ -292,7 +274,7 @@ def get_rejection_context():
         conn.close()
         if not rows:
             return ""
-        lines = ["Josh has recently passed on these roles and here's why (use this to calibrate):"]
+        lines = ["Ray has recently passed on these roles and here's why (use this to calibrate):"]
         for title, company, reason in rows:
             lines.append(f"  - {title} @ {company}: \"{reason}\"")
         return "\n".join(lines)
@@ -304,16 +286,16 @@ def claude_relevance_check(job):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     rejection_context = get_rejection_context()
 
-    prompt = f"""You are filtering job postings for Josh Sachs, a new grad CS student graduating June 2026 from UC Santa Cruz.
+    prompt = f"""You are filtering job postings for Ray Schnitzler, an engineering leader who helps teams deliver production systems companies can rely on.
 
 Target profile:
-- Roles: SDR, BDR, Sales Development, Sales Engineer, Solutions Engineer, Account Development, Technical Sales, entry-level AE
-- Industry: Tech, SaaS, AI, Automation only (no healthcare, insurance, staffing agencies)
-- Location: Bay Area (SF, Oakland, East Bay, South Bay/Peninsula) or Remote
-- Pay: $55k+ base with path to $100k+ via OTE or fast promotion
-- Experience: suitable for 0-2 years (does NOT need to say "new grad" explicitly)
-- Internships: include sales/GTM/BD internships at well-known tech companies with high intern-to-FT conversion
-- Exclude: roles requiring 3+ years experience, non-English language requirements, non-tech industries
+- Roles: Engineering Manager, Senior Engineering Manager, Director of Engineering, Head of Engineering, VP Engineering, Principal/Staff Engineer
+- Background: MIT BS/MS CS+EE. Built teams from 0→20+ multiple times. Led enterprise auth platform securing tens of millions of daily users at Wells Fargo. Currently building production AI platform at Lexicon Branding (Next.js, Supabase, LLM workflows). Independent consulting for ML-driven energy trading, platform migrations. $2M+ fraud savings, multiple US patents.
+- Industries: Fintech, authentication/identity, AI/ML systems, platform engineering, developer tools, energy/trading (no healthcare, insurance, staffing)
+- Location: Bay Area (SF, Oakland, Berkeley, East Bay) or Remote. South Bay acceptable but less preferred.
+- Compensation: $200k+ total comp baseline
+- Experience: 20+ years — roles should be senior IC (Staff+) or management/director level
+- Exclude: entry-level roles, junior roles, BDR/SDR, roles requiring < 10 years experience, non-tech industries, contract/temp roles
 
 {rejection_context}
 
@@ -321,14 +303,14 @@ Job posting:
 Title: {job.get("title")}
 Company: {job.get("company")}
 Location: {job.get("location")}
-Description (first 2000 chars): {str(job.get("description") or "")[:2000]}
+Description (first 3000 chars): {str(job.get("description") or "")[:3000]}
 
 Respond with JSON only:
 {{
   "relevant": true or false,
   "reason": "one sentence max",
   "fit_score": 1 to 10,
-  "experience_required": "e.g. 0-1 years or 5+ years",
+  "experience_match": "e.g. strong match, overqualified, underleveled",
   "location_ok": true or false
 }}"""
 
@@ -350,125 +332,13 @@ Respond with JSON only:
 
 
 def claude_prompt_eng_check(job):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    prompt = f"""You are evaluating whether a job posting is a good fit for Josh Sachs, a CS student graduating June 2026 from UC Santa Cruz who is interested in Prompt Engineer / AI Engineer roles.
-
-Josh's relevant qualifications:
-- B.A. Computer Science, UC Santa Cruz (graduating June 2026)
-- Python (strong), JavaScript, C, C++
-- Built and shipped automation tools using LLM APIs (Anthropic Claude API)
-- Experience with workflow automation: Zapier, Google Sheets API, Gmail API
-- Built AI-powered job scout tool using Claude for relevance scoring
-- Basic Machine Learning coursework
-- 2 internships involving automation engineering and sales engineering
-- No prior dedicated "AI/ML engineer" role, but hands-on LLM API usage
-
-What makes Josh a fit for prompt engineer roles:
-- Direct experience writing prompts for Claude (structured JSON output, multi-criteria filtering)
-- Built production tools with LLM APIs
-- CS fundamentals (data structures, systems, databases)
-- Strong Python
-
-What would disqualify Josh:
-- Roles requiring 3+ years experience
-- Roles requiring ML research background (PhD/MS level)
-- Roles requiring deep model training/fine-tuning expertise
-- Non-tech industry
-- Non-Bay Area and not remote
-
-Job posting:
-Title: {job.get("title")}
-Company: {job.get("company")}
-Location: {job.get("location")}
-Description (first 2000 chars): {str(job.get("description") or "")[:2000]}
-
-Assess whether Josh is genuinely qualified and whether this is worth applying to.
-Respond with JSON only:
-{{
-  "relevant": true or false,
-  "reason": "one sentence max",
-  "fit_score": 1 to 10,
-  "experience_required": "e.g. 0-1 years or 3+ years",
-  "location_ok": true or false
-}}"""
-
-    try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        text = response.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        return json.loads(text.strip())
-    except Exception as e:
-        logging.warning(f"Claude prompt eng check failed: {e}")
-        return {"relevant": False, "reason": "api error", "fit_score": 0}
+    """Unused — kept as stub for compatibility."""
+    return claude_relevance_check(job)
 
 
 def claude_comms_check(job):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    prompt = f"""You are evaluating whether a job posting is a good fit for Josh Sachs, a CS student graduating June 2026 from UC Santa Cruz who is targeting communications and community roles at tech companies.
-
-Josh's relevant qualifications for comms roles:
-- B.A. Computer Science, UC Santa Cruz (graduating June 2026) -- gives technical credibility
-- VP of Member Integration at Alpha Kappa Psi: ran a 7-week professional development program, led fundraising raising $6.5K in 7 weeks, alumni workshops, interview prep
-- Authored daily analytics briefs for founders at Cush Real Estate (translating technical metrics into business recommendations)
-- Client-facing communication, demo scheduling, cold calling at Shockproof
-- Public speaking, leadership, team development
-- Python/JavaScript -- can write scripts, build tooling, work with developer audiences
-
-Best-fit roles for Josh:
-- Developer Advocate / Developer Relations (strong fit: CS + communication skills)
-- Marketing Communications Coordinator at a tech/SaaS company
-- Community Manager at a tech company
-- Content Marketing at a tech/SaaS/AI company
-- Technical Writer entry level
-
-What would disqualify Josh:
-- Roles requiring 3+ years experience
-- PR/comms at non-tech industries (healthcare, finance, law)
-- Roles requiring an existing large social media following or journalism background
-- Senior-level strategy roles
-
-Location: Bay Area or Remote only.
-Pay: $50k+ base.
-
-Job posting:
-Title: {job.get("title")}
-Company: {job.get("company")}
-Location: {job.get("location")}
-Description (first 2000 chars): {str(job.get("description") or "")[:2000]}
-
-Respond with JSON only:
-{{
-  "relevant": true or false,
-  "reason": "one sentence max",
-  "fit_score": 1 to 10,
-  "experience_required": "e.g. 0-1 years or 3+ years",
-  "location_ok": true or false
-}}"""
-
-    try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        text = response.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        return json.loads(text.strip())
-    except Exception as e:
-        logging.warning(f"Claude comms check failed: {e}")
-        return {"relevant": False, "reason": "api error", "fit_score": 0}
+    """Unused — kept as stub for compatibility."""
+    return claude_relevance_check(job)
 
 
 def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_repost=False, is_comms=False):
@@ -539,8 +409,57 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
         color=color
     )
 
+    # Format salary range — try structured fields first, then extract from description
+    min_sal = job.get("min_amount")
+    max_sal = job.get("max_amount")
+    interval = str(job.get("interval", "")).lower()
+    salary_str = "N/A"
+
+    if min_sal and max_sal:
+        try:
+            lo, hi = float(min_sal), float(max_sal)
+            if interval == "hourly":
+                salary_str = f"${lo:.0f}-${hi:.0f}/hr"
+            elif lo >= 1000:
+                salary_str = f"${lo/1000:.0f}k-${hi/1000:.0f}k"
+            else:
+                salary_str = f"${lo:.0f}-${hi:.0f}"
+        except (ValueError, TypeError):
+            pass
+    elif max_sal:
+        try:
+            hi = float(max_sal)
+            salary_str = f"Up to ${hi/1000:.0f}k" if hi >= 1000 else f"Up to ${hi:.0f}"
+        except (ValueError, TypeError):
+            pass
+
+    # Fallback: extract salary from description text
+    if salary_str == "N/A":
+        desc = str(job.get("description") or "")
+        # Match patterns like $234,650 - $259,350 or $200k - $300k or $200,000-$300,000
+        sal_match = re.search(
+            r'\$\s*([\d,]+(?:\.\d+)?)\s*[kK]?\s*[-–—to]+\s*\$?\s*([\d,]+(?:\.\d+)?)\s*[kK]?',
+            desc
+        )
+        if sal_match:
+            try:
+                lo_str = sal_match.group(1).replace(",", "")
+                hi_str = sal_match.group(2).replace(",", "")
+                lo = float(lo_str)
+                hi = float(hi_str)
+                # Handle "k" suffix
+                if "k" in sal_match.group(0).lower():
+                    if lo < 1000: lo *= 1000
+                    if hi < 1000: hi *= 1000
+                # Only show if it looks like annual salary (> $50k)
+                if hi >= 50000:
+                    salary_str = f"~${lo/1000:.0f}k-${hi/1000:.0f}k"
+            except (ValueError, TypeError):
+                pass
+
     embed.add_embed_field(name="Company", value=str(job.get("company", "N/A")), inline=True)
     embed.add_embed_field(name="Location", value=str(job.get("location", "N/A")), inline=True)
+    embed.add_embed_field(name="Salary", value=salary_str, inline=True)
     embed.add_embed_field(name="Posted", value=posted_str, inline=True)
     embed.add_embed_field(name="Applicants", value=str(applicants) if applicants is not None else "N/A", inline=True)
     embed.add_embed_field(name="Source", value=str(job.get("site", "N/A")).capitalize(), inline=True)
@@ -651,7 +570,7 @@ def run():
                     site_name=["linkedin"],
                     search_term=search_term,
                     location=location,
-                    results_wanted=50,
+                    results_wanted=30,
                     hours_old=24,
                     job_type="fulltime",
                 )
@@ -662,105 +581,8 @@ def run():
                 logging.error(f"Error scraping '{search_term}' in {location}: {e}")
             time.sleep(2)
 
-    # Intern searches
-    for search_term in INTERN_SEARCH_TERMS:
-        for location in LOCATIONS:
-            try:
-                jobs_df = scrape_jobs(
-                    site_name=["linkedin"],
-                    search_term=search_term,
-                    location=location,
-                    results_wanted=25,
-                    hours_old=24,
-                    job_type="fulltime",
-
-                )
-                if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' (intern) in {location}: {len(jobs_df)} results")
-                    total_alerted += process_jobs(jobs_df, conn, is_intern=True)
-            except Exception as e:
-                logging.error(f"Error scraping '{search_term}' intern in {location}: {e}")
-            time.sleep(2)
-
-    # Prompt Engineer / AI Engineer searches (Bay Area + remote)
-    for search_term in PROMPT_ENG_SEARCH_TERMS:
-        for location in LOCATIONS:
-            try:
-                jobs_df = scrape_jobs(
-                    site_name=["linkedin"],
-                    search_term=search_term,
-                    location=location,
-                    results_wanted=30,
-                    hours_old=24,
-                    job_type="fulltime",
-
-                )
-                if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' (prompt eng) in {location}: {len(jobs_df)} results")
-                    total_alerted += process_jobs(jobs_df, conn, is_prompt_eng=True)
-            except Exception as e:
-                logging.error(f"Error scraping '{search_term}' prompt eng in {location}: {e}")
-            time.sleep(2)
-    # Prompt Engineer remote
-    for search_term in ["Prompt Engineer remote", "AI Engineer remote entry level"]:
-        try:
-            jobs_df = scrape_jobs(
-                site_name=["linkedin"],
-                search_term=search_term,
-                location="United States",
-                results_wanted=30,
-                hours_old=24,
-                job_type="fulltime",
-                is_remote=True,
-
-            )
-            if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (prompt eng remote): {len(jobs_df)} results")
-                total_alerted += process_jobs(jobs_df, conn, is_prompt_eng=True, is_remote=True)
-        except Exception as e:
-            logging.error(f"Error scraping remote prompt eng '{search_term}': {e}")
-        time.sleep(2)
-
-    # Comms / DevRel searches (Bay Area + remote)
-    for search_term in COMMS_SEARCH_TERMS:
-        for location in LOCATIONS:
-            try:
-                jobs_df = scrape_jobs(
-                    site_name=["linkedin"],
-                    search_term=search_term,
-                    location=location,
-                    results_wanted=30,
-                    hours_old=24,
-                    job_type="fulltime",
-
-                )
-                if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' (comms) in {location}: {len(jobs_df)} results")
-                    total_alerted += process_jobs(jobs_df, conn, is_comms=True)
-            except Exception as e:
-                logging.error(f"Error scraping '{search_term}' comms in {location}: {e}")
-            time.sleep(2)
-    for search_term in ["Developer Advocate remote", "Developer Relations remote", "Community Manager remote tech"]:
-        try:
-            jobs_df = scrape_jobs(
-                site_name=["linkedin"],
-                search_term=search_term,
-                location="United States",
-                results_wanted=30,
-                hours_old=24,
-                job_type="fulltime",
-                is_remote=True,
-
-            )
-            if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (comms remote): {len(jobs_df)} results")
-                total_alerted += process_jobs(jobs_df, conn, is_comms=True, is_remote=True)
-        except Exception as e:
-            logging.error(f"Error scraping remote comms '{search_term}': {e}")
-        time.sleep(2)
-
     # Remote searches
-    for search_term in ["SDR remote", "BDR remote", "Sales Development Representative remote", "Sales Engineer remote"]:
+    for search_term in ["Engineering Manager remote", "Senior Engineering Manager remote", "Director of Engineering remote"]:
         try:
             jobs_df = scrape_jobs(
                 site_name=["linkedin"],

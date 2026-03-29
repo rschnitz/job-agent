@@ -1,0 +1,80 @@
+# Job Agent — Deterministic Filters
+# These run BEFORE scoring. Fast rejection, no LLM needed.
+
+# Experience requirements — regex patterns matched against description
+# Jobs requiring more than max_years are rejected
+experience:
+  max_years: 25          # effectively no cap for you
+  min_years: 5           # reject roles clearly targeting junior/entry-level
+  # Patterns that indicate required experience (captures the number)
+  patterns:
+    - '(\d+)\+?\s*years?\s+(?:of\s+)?experience'
+    - '(\d+)\+?\s*years?\s+(?:of\s+)?(?:relevant|professional|industry)'
+    - 'minimum\s+(?:of\s+)?(\d+)\s+years?'
+    - '(\d+)-(\d+)\s+years?\s+(?:of\s+)?experience'   # range: use lower bound
+
+# Salary floor (annual USD)
+salary:
+  minimum: 150000
+
+# Title exclusions (case-insensitive substring match)
+exclude_titles:
+  - "software engineer"
+  - "data engineer"
+  - "machine learning engineer"
+  - "data scientist"
+  - "mechanical engineer"
+  - "electrical engineer"
+  - "hardware engineer"
+  - "civil engineer"
+  - "chemical engineer"
+  - "structural engineer"
+  - "nurse"
+  - "physician"
+  - "therapist"
+  - "dentist"
+  - "teacher"
+  - "accountant"
+  - "attorney"
+  - "paralegal"
+  - "intern"          # not targeting internships at this level
+  - "associate engineer"
+  - "junior engineer"
+  - "entry level"
+  - "new grad"
+
+# Industry exclusions (matched against company name + description)
+exclude_industries:
+  - hospital
+  - clinic
+  - insurance
+  - legal
+  - law firm
+  - pharmaceutical
+  - pharma
+  - dental
+  - therapy
+  - staffing
+  - recruiting agency
+  - "we are hiring on behalf"
+
+# Repost signals (matched against title + description)
+repost_signals:
+  - repost
+  - re-post
+  - reposting
+  - re-posting
+  - previously posted
+  - originally posted
+  - posting again
+  - reactivated
+  - re-listed
+  - relisted
+  - re-opening
+
+# Freshness filter
+freshness:
+  # Jobs older than this (hours) with unknown applicant count are rejected
+  max_age_hours: 48
+  # Jobs with applicant count below this always pass freshness
+  low_applicant_threshold: 25

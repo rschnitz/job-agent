@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, MessageSquare, User } from "lucide-react";
+import { Briefcase, List, MessageSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/", icon: Briefcase, label: "Board" },
+  { href: "/jobs", icon: List, label: "Table" },
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
@@ -16,7 +17,7 @@ export function NavLinks() {
   return (
     <>
       {links.map(({ href, icon: Icon, label }) => {
-        const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+        const active = pathname === href;
         return (
           <Link
             key={href}

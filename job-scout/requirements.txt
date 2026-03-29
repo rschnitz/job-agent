@@ -1,0 +1,9 @@
+anthropic
+beautifulsoup4
+discord.py
+discord-webhook
+python-jobspy
+pypdf
+python-dotenv
+pyyaml
+requests

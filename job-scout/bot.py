@@ -72,8 +72,10 @@ pending_rejections = {}
 # user_id -> {"job_url": str|None, "jd_file": str|None, "label": str}
 pending_requests = {}
 
+LOG_PATH = os.path.join(SCRIPT_DIR, "logs", "bot.log")
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 logging.basicConfig(
-    filename="/var/log/jobscout_bot.log",
+    filename=LOG_PATH,
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )

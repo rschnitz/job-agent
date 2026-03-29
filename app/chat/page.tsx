@@ -9,9 +9,9 @@ import { cn } from "@/lib/utils";
 
 const STARTER_PROMPTS = [
   "Review my resume and suggest improvements",
-  "Help me write a cold outreach message to a recruiter",
-  "What questions should I prep for a SDR interview?",
-  "Compare my background to a typical sales engineer role",
+  "Help me write a cold outreach message to a hiring manager",
+  "What questions should I prep for an EM interview?",
+  "Compare my background to a typical Director of Engineering role",
 ];
 
 export default function GeneralChat() {

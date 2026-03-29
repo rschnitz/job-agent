@@ -57,7 +57,7 @@ export default function JobDetail() {
       .eq("job_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
     if (data) {
       setConvId(data.id);
       setMessages(data.messages ?? []);

@@ -1,0 +1,50 @@
+# Job Agent — Search Configuration
+# Controls what the scraper looks for and where.
+
+# Primary role searches
+search_terms:
+  - "Engineering Manager"
+  - "Senior Engineering Manager"
+  - "Director of Engineering"
+  - "Head of Engineering"
+  - "VP Engineering"
+  - "Engineering Manager fintech"
+  - "Engineering Manager platform"
+  - "Engineering Manager authentication"
+  - "Engineering Manager AI"
+  - "Engineering Manager developer tools"
+
+# Remote-only searches (appended to "United States" location)
+remote_search_terms:
+  - "Engineering Manager remote"
+  - "Senior Engineering Manager remote"
+  - "Director of Engineering remote"
+
+# Locations to search (each term × each location)
+locations:
+  - "San Francisco, CA"
+  - "Oakland, CA"
+  - "Berkeley, CA"
+
+# Schedule (all times in PT)
+schedule:
+  weekday_peak:
+    hours: "6-20"       # 6am - 8pm PT
+    interval_minutes: 15
+  weekday_offpeak:
+    hours: "21-5"       # 9pm - 5am PT
+    interval_minutes: 60
+  weekend:
+    interval_minutes: 60
+
+  # Less frequent check for LinkedIn saved jobs
+  saved_jobs:
+    interval_minutes: 120
+    enabled: true
+
+# JobSpy settings
+jobspy:
+  site_name: ["linkedin"]
+  results_wanted: 30
+  hours_old: 24
+  job_type: "fulltime"

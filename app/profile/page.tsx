@@ -6,31 +6,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, User } from "lucide-react";
 
-const DEFAULT_RESUME = `UC Santa Cruz, 4th year CS major (B.A.), graduating June 2026.
+const DEFAULT_RESUME = `MIT BS/MS Computer Science and Electrical Engineering.
+
+I help engineering teams deliver production systems companies can rely on.
 
 Experience:
-- Automation Engineer, Cush Real Estate (Jun 2025–present)
-  Led RealScout CRM platform transition and onboarded 10+ agents. Automated lead routing (90% time reduction). Built follow-up workflow that increased agent compliance by 35%. Deliver daily analytics briefs to founders translating metrics into business recommendations.
+- Principal Engineer, Lexicon Branding (2025-present)
+  Led architecture and delivery of a production AI platform translating decades of proprietary research and a corpus of over half a million evaluated candidate names into structured naming analysis. Designed full-stack system architecture (Next.js, Supabase/PostgreSQL, LLM workflows).
 
-- Sales Engineering Intern, Shockproof (May 2025)
-  Built 50-email/day outreach automation from 3,000+ contact list. Navigated complex org structures at banks to reach decision-makers. Cold calling experience.
+- Principal Engineer, schnitz.org (2024-present)
+  Independent consulting: Generous Energy (ML-driven electricity trading, ERCOT markets), ShockProof! Training (AI-enabled workflow platform), CarMagic (platform migration strategy, 20-30% cost reduction).
 
-Leadership:
-- Executive Vice President, Alpha Kappa Psi (AKPsi), Chi Gamma Chapter — current. Previously VP of Member Integration.
+- Engineering Manager, Wells Fargo Bank (2004-2025)
+  Led AuthHub cloud-native enterprise authentication platform. Scaled teams 0→20+. $2M+ annual fraud savings. 25% developer productivity increase. Tens of millions of daily users. Java/Spring Boot, MongoDB, distributed systems.
 
-Key narrative: "I've been on the buying side of a sales engineer interaction. I evaluated RealScout, recommended it to leadership, and led the full rollout for 10+ agents. That experience made me want to do this full-time."`;
+- Director of Software Development, Round1, San Francisco
+  Fintech platform for institutional investors. Algorithmic auction system. US and international patents.
 
-const DEFAULT_SKILLS = `Sales outreach automation, CRM platforms (RealScout, HubSpot), workflow automation, B2B prospecting, cold calling, technical demos, Python, JavaScript/TypeScript, Next.js, Supabase, Claude API, data analysis, translating technical concepts for non-technical buyers`;
+- Senior Engineer, Samsung Advanced Media Laboratory
+  Multiple US and international patents. Reduced product development cycles by six months.
 
-const DEFAULT_PREFERENCES = `Target roles: SDR, BDR, Sales Engineering, Solutions Engineering, Account Executive (entry), GTM roles at AI/automation/SaaS companies.
+Key narrative: "I develop whole engineers who take ownership beyond code — engineers who lead projects, mentor others, drive quality improvements, and own their systems in production."`;
 
-Location: SF Bay Area — East Bay and Santa Cruz base. Happy to be in-person in SF.
+const DEFAULT_SKILLS = `Java, Python, Shell, C++, Spring Boot, REST APIs, PostgreSQL, MongoDB, Redis, Kafka, Distributed systems, Microservices, API platforms, Authentication systems, Observability, Reliability engineering, CI/CD pipelines, Automated testing, Code generation, Developer productivity tooling, LLM integration, AI platform architecture, Data pipelines, Next.js, Supabase`;
 
-Target comp: $70–90k base with clear path to $100k+.
+const DEFAULT_PREFERENCES = `Target roles: Engineering Manager, Senior EM, Director of Engineering, Head of Engineering, Principal/Staff Engineer.
 
-Industry preference: AI, automation, real estate tech, SaaS.
+Location: Piedmont/Bay Area — SF, Oakland, Berkeley preferred. Remote OK. South Bay acceptable.
 
-Cover letter style: Story-driven, leads with genuine company interest. Strong closer with a logistics/availability line. Best when it tells a specific story rather than listing accomplishments formulaically.`;
+Target comp: $200k+ total compensation baseline.
+
+Industries: Fintech, authentication/identity, platform engineering, AI/ML, developer tools, energy trading.
+
+Values: Meaningful mission, strong people development culture, collaborative technical decision-making.
+
+Cover letter style: Direct, substantive, technically confident but people-focused. Lead with specific impact, not generic enthusiasm.`;
 
 export default function ProfilePage() {
   const [resumeText, setResumeText] = useState("");
