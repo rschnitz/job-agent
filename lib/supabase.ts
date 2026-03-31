@@ -30,6 +30,17 @@ export type Job = {
   source: string | null;
   status: JobStatus;
   fit_score: number | null;
+  relevance_score: number | null;
+  relevance_explanation: string | null;
+  fit_explanation: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  bonus_or_commission_est: number | null;
+  equity_est: number | null;
+  location: string | null;
+  remote_days: number | null;
+  posted_at: string | null;
+  applicant_count: number | null;
   notes: string | null;
   created_at: string;
 };

@@ -90,6 +90,42 @@ const columns: ColumnDef<Job>[] = [
     },
   },
   {
+    accessorKey: "salary_max",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Salary <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const min = row.original.salary_min;
+      const max = row.original.salary_max;
+      if (min && max) return <span className="text-xs tabular-nums">${Math.round(min/1000)}k-${Math.round(max/1000)}k</span>;
+      if (max) return <span className="text-xs tabular-nums">Up to ${Math.round(max/1000)}k</span>;
+      return <span className="text-xs text-muted-foreground">—</span>;
+    },
+  },
+  {
+    accessorKey: "location",
+    header: "Location",
+    cell: ({ row }) => (
+      <span className="text-xs text-muted-foreground truncate max-w-[150px] block">{row.original.location ?? "—"}</span>
+    ),
+  },
+  {
+    accessorKey: "applicant_count",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Appl <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const count = row.original.applicant_count;
+      if (count == null) return <span className="text-xs text-muted-foreground">—</span>;
+      const color = count <= 10 ? "text-emerald-600 font-semibold" : count <= 50 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-xs tabular-nums ${color}`}>{count}</span>;
+    },
+  },
+  {
     accessorKey: "source",
     header: "Source",
     cell: ({ row }) => (
@@ -136,7 +172,7 @@ export default function JobsTablePage() {
   const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false });
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<JobStatus>>(new Set(["new", "saved", "applied", "interviewing", "offer"]));
 

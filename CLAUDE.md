@@ -1,5 +1,14 @@
 # Job Agent — Claude Code Instructions
 
+## Cross-project coordination
+
+This project shares scoring infrastructure with `~/Dropbox/RAS` (Ray's job search system).
+
+**Inbox**: Check `.claude/inbox/` at session start for messages from other Claude instances.
+**Outbox**: Write messages to `~/Dropbox/RAS/.claude/inbox/` when coordination is needed.
+
+Related RAS capabilities: `/evaluate`, `/score-fit`, `comp_calculator.py`, `posting_cache.py`.
+
 ## Stack
 - Next.js 16 (App Router, TypeScript)
 - Supabase (PostgreSQL)

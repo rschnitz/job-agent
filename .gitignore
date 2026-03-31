@@ -18,3 +18,4 @@ job-scout/output/
 .claude/worktrees/
 job-scout/#*#
 job-scout/.#*
+.claude/inbox/

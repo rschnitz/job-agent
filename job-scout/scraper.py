@@ -516,6 +516,29 @@ def post_to_job_agent(job, analysis):
     if not INGEST_API_KEY:
         return
     try:
+        # Parse salary from structured fields
+        sal_min = None
+        sal_max = None
+        try:
+            if job.get("min_amount"):
+                sal_min = int(float(job["min_amount"]))
+            if job.get("max_amount"):
+                sal_max = int(float(job["max_amount"]))
+        except (ValueError, TypeError):
+            pass
+
+        # Parse posted date
+        posted_at = None
+        dp = job.get("date_posted")
+        if dp:
+            try:
+                if hasattr(dp, "isoformat"):
+                    posted_at = dp.isoformat()
+                else:
+                    posted_at = str(dp)
+            except Exception:
+                pass
+
         payload = {
             "title": str(job.get("title") or ""),
             "company": str(job.get("company") or ""),
@@ -523,6 +546,13 @@ def post_to_job_agent(job, analysis):
             "description": str(job.get("description") or ""),
             "source": str(job.get("site") or "linkedin"),
             "fit_score": analysis.get("fit_score"),
+            "relevance_score": analysis.get("fit_score"),  # currently same; will diverge with /evaluate
+            "relevance_explanation": analysis.get("reason"),
+            "salary_min": sal_min,
+            "salary_max": sal_max,
+            "location": str(job.get("location") or ""),
+            "posted_at": posted_at,
+            "applicant_count": job.get("applicants"),
         }
         resp = requests.post(
             INGEST_URL,

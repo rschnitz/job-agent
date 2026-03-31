@@ -140,13 +140,13 @@ export default function JobDetail() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-5">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to board
-        </Link>
+          Back
+        </button>
         <button
           onClick={deleteJob}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-400 transition-colors cursor-pointer"
