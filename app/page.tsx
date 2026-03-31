@@ -93,9 +93,14 @@ export default function JobBoard() {
     }
   }
 
-  async function deleteJob(id: string) {
-    await supabase.from("jobs").delete().eq("id", id);
-    setJobs((prev) => prev.filter((j) => j.id !== id));
+  async function dismissJob(id: string) {
+    const reason = prompt("Why are you passing on this role? (helps improve future filtering)");
+    if (reason === null) return; // cancelled
+    await supabase.from("jobs").update({
+      status: "rejected",
+      rejection_reason: reason || undefined,
+    }).eq("id", id);
+    setJobs((prev) => prev.map((j) => j.id === id ? { ...j, status: "rejected" as JobStatus, rejection_reason: reason } : j));
   }
 
   async function addJob() {
@@ -253,12 +258,10 @@ export default function JobBoard() {
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        if (confirm(`Delete "${job.title}" at ${job.company}? This is permanent.`)) {
-                          deleteJob(job.id);
-                        }
+                        dismissJob(job.id);
                       }}
-                      className="absolute top-1.5 right-1.5 h-4 w-4 rounded flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
-                      title="Delete job permanently"
+                      className="absolute top-1.5 right-1.5 h-4 w-4 rounded flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-orange-400 hover:bg-orange-400/10 transition-all cursor-pointer"
+                      title="Dismiss with reason"
                     >
                       <X className="h-3 w-3" />
                     </button>

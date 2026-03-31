@@ -73,10 +73,14 @@ export default function JobDetail() {
     await supabase.from("jobs").update({ notes }).eq("id", id);
   }
 
-  async function deleteJob() {
-    if (!confirm("Remove this job from your board?")) return;
-    await supabase.from("jobs").delete().eq("id", id);
-    router.push("/");
+  async function dismissJob() {
+    const reason = prompt("Why are you passing on this role? (helps improve future filtering)");
+    if (reason === null) return;
+    await supabase.from("jobs").update({
+      status: "rejected",
+      rejection_reason: reason || undefined,
+    }).eq("id", id);
+    setJob((j) => j ? { ...j, status: "rejected" as JobStatus, rejection_reason: reason } : j);
   }
 
   async function sendMessage() {
@@ -148,11 +152,11 @@ export default function JobDetail() {
           Back
         </button>
         <button
-          onClick={deleteJob}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-400 transition-colors cursor-pointer"
+          onClick={dismissJob}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-orange-400 transition-colors cursor-pointer"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Remove job
+          Dismiss
         </button>
       </div>
 

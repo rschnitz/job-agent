@@ -21,6 +21,7 @@ create table if not exists jobs (
   remote_days integer,
   posted_at timestamptz,
   applicant_count integer,
+  rejection_reason text,
   notes text,
   created_at timestamptz not null default now()
 );

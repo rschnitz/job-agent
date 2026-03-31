@@ -46,7 +46,9 @@
       "Bash(uv run:*)",
       "Bash(git add:*)",
       "Bash(git rm:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(mkdir -p ~/src/job-agent/.claude/inbox/read)",
+      "Bash(mv ~/src/job-agent/.claude/inbox/2026-03-31-from-ras.md ~/src/job-agent/.claude/inbox/read/)"
     ]
   }
 }

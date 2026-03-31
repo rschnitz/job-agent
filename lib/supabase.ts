@@ -41,6 +41,7 @@ export type Job = {
   remote_days: number | null;
   posted_at: string | null;
   applicant_count: number | null;
+  rejection_reason: string | null;
   notes: string | null;
   created_at: string;
 };

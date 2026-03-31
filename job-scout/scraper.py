@@ -177,8 +177,110 @@ def mark_seen(conn, job_url, title="", company="", outcome="", score=None):
     conn.commit()
 
 
+POSTING_CACHE_DIR = os.path.expanduser("~/.cache/job-search/postings")
+CACHE_TTL_DAYS = 7
+
+
+def _job_id_from_url(url):
+    """Extract LinkedIn job ID from URL for cache keying."""
+    m = re.search(r'/view/(\d+)', url)
+    return m.group(1) if m else None
+
+
+def _cache_get(job_url):
+    """Check posting cache. Returns (html, text, fetch_time) or (None, None, None)."""
+    job_id = _job_id_from_url(job_url)
+    if not job_id:
+        return None, None, None
+    cache_dir = os.path.join(POSTING_CACHE_DIR, job_id)
+    html_path = os.path.join(cache_dir, "page.html")
+    text_path = os.path.join(cache_dir, "text.txt")
+    meta_path = os.path.join(cache_dir, "meta.json")
+    if not os.path.exists(html_path):
+        return None, None, None
+    try:
+        with open(meta_path) as f:
+            meta = json.load(f)
+        fetch_time = meta.get("fetched_at", "")
+        # Check TTL
+        from datetime import timedelta
+        fetched = datetime.fromisoformat(fetch_time)
+        if datetime.now(timezone.utc) - fetched > timedelta(days=CACHE_TTL_DAYS):
+            return None, None, None  # expired
+        with open(html_path, encoding="utf-8") as f:
+            html = f.read()
+        text = None
+        if os.path.exists(text_path):
+            with open(text_path, encoding="utf-8") as f:
+                text = f.read()
+        return html, text, fetch_time
+    except Exception:
+        return None, None, None
+
+
+def _cache_put(job_url, html, text):
+    """Store posting in cache."""
+    job_id = _job_id_from_url(job_url)
+    if not job_id:
+        return
+    cache_dir = os.path.join(POSTING_CACHE_DIR, job_id)
+    os.makedirs(cache_dir, exist_ok=True)
+    with open(os.path.join(cache_dir, "page.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+    if text:
+        with open(os.path.join(cache_dir, "text.txt"), "w", encoding="utf-8") as f:
+            f.write(text)
+    with open(os.path.join(cache_dir, "meta.json"), "w") as f:
+        json.dump({"url": job_url, "fetched_at": datetime.now(timezone.utc).isoformat()}, f)
+
+
+def _parse_job_page(html):
+    """Extract description, applicant count, and repost flag from HTML."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    full_desc = None
+    for selector in [
+        ".show-more-less-html__markup",
+        ".description__text",
+        ".job-description",
+        "[data-testid='job-description']",
+        ".jobsearch-jobDescriptionText",
+    ]:
+        el = soup.select_one(selector)
+        if el and len(el.get_text(strip=True)) > 200:
+            full_desc = el.get_text(separator="\n", strip=True)
+            break
+
+    applicant_count = None
+    page_text = soup.get_text()
+    for pattern in [
+        r"(\d[\d,]+)\s+applicants?",
+        r"Over\s+(\d[\d,]+)\s+applicants?",
+        r"Be among the first\s+(\d+)",
+        r"(\d+)\s+people\s+clicked\s+apply",
+        r"(\d+)\s+clicked\s+apply",
+    ]:
+        match = re.search(pattern, page_text, re.IGNORECASE)
+        if match:
+            try:
+                applicant_count = int(match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+            break
+
+    page_repost = bool(re.search(r"reposted", html, re.IGNORECASE))
+    return full_desc, applicant_count, page_repost
+
+
 def fetch_full_job_details(job_url):
-    """Fetch full description and applicant count from the actual job page."""
+    """Fetch full description and applicant count, using cache when available."""
+    # Check cache first
+    cached_html, cached_text, _ = _cache_get(job_url)
+    if cached_html:
+        logging.info(f"Cache hit: {job_url}")
+        return _parse_job_page(cached_html)
+
+    # Fetch from LinkedIn
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -188,40 +290,12 @@ def fetch_full_job_details(job_url):
     }
     try:
         resp = requests.get(job_url, headers=headers, timeout=15)
-        soup = BeautifulSoup(resp.text, "html.parser")
+        html = resp.text
 
-        full_desc = None
-        for selector in [
-            ".show-more-less-html__markup",
-            ".description__text",
-            ".job-description",
-            "[data-testid='job-description']",
-            ".jobsearch-jobDescriptionText",
-        ]:
-            el = soup.select_one(selector)
-            if el and len(el.get_text(strip=True)) > 200:
-                full_desc = el.get_text(separator="\n", strip=True)
-                break
+        full_desc, applicant_count, page_repost = _parse_job_page(html)
 
-        applicant_count = None
-        page_text = soup.get_text()
-        for pattern in [
-            r"(\d[\d,]+)\s+applicants?",
-            r"Over\s+(\d[\d,]+)\s+applicants?",
-            r"Be among the first\s+(\d+)",
-            r"(\d+)\s+people\s+clicked\s+apply",
-            r"(\d+)\s+clicked\s+apply",
-        ]:
-            match = re.search(pattern, page_text, re.IGNORECASE)
-            if match:
-                try:
-                    applicant_count = int(match.group(1).replace(",", ""))
-                except ValueError:
-                    pass
-                break
-
-        # "Reposted" appears in the raw HTML as a label even when plain text strips context
-        page_repost = bool(re.search(r"reposted", resp.text, re.IGNORECASE))
+        # Cache the result
+        _cache_put(job_url, html, full_desc)
 
         return full_desc, applicant_count, page_repost
     except Exception as e:
