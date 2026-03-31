@@ -37,7 +37,16 @@
       "Bash(sqlite3 jobs.db \"SELECT COUNT\\(*\\) FROM seen_jobs;\")",
       "Bash(sqlite3 jobs.db \"SELECT title FROM seen_jobs ORDER BY date_found DESC;\")",
       "Bash(sqlite3:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git commit:*)",
+      "Bash(grep \"results$\")",
+      "Bash(pip3 list:*)",
+      "Bash(pip3 install:*)",
+      "Bash(command uv:*)",
+      "Bash(uv run:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(git reset:*)"
     ]
   }
 }

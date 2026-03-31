@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, company, url, description, source } = body;
+  const { title, company, url, description, source, fit_score } = body;
 
   if (!title || !company) {
     return NextResponse.json({ error: "title and company are required" }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await db
     .from("jobs")
-    .insert({ title, company, url: url ?? null, description: description ?? null, source: source ?? null, status: "new" })
+    .insert({ title, company, url: url ?? null, description: description ?? null, source: source ?? null, status: "new", fit_score: fit_score ?? null })
     .select()
     .single();
 

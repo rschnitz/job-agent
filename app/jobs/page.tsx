@@ -76,6 +76,20 @@ const columns: ColumnDef<Job>[] = [
     sortingFn: (a, b) => STATUS_ORDER[a.original.status] - STATUS_ORDER[b.original.status],
   },
   {
+    accessorKey: "fit_score",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Score <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const score = row.original.fit_score;
+      if (score == null) return <span className="text-xs text-muted-foreground">—</span>;
+      const color = score >= 8 ? "text-emerald-600 font-semibold" : score >= 6 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-sm tabular-nums ${color}`}>{score}/10</span>;
+    },
+  },
+  {
     accessorKey: "source",
     header: "Source",
     cell: ({ row }) => (

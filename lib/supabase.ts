@@ -29,6 +29,7 @@ export type Job = {
   description: string | null;
   source: string | null;
   status: JobStatus;
+  fit_score: number | null;
   notes: string | null;
   created_at: string;
 };

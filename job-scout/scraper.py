@@ -45,12 +45,10 @@ SEARCH_TERMS = [
     "VP Engineering",
     "Engineering Manager fintech",
     "Engineering Manager platform",
-    "Engineering Manager authentication",
-    "Engineering Manager AI",
-    "Engineering Manager developer tools",
-    "Principal Engineer", "Principal Software Engineer",
-    "Senior Staff Engineer", "Senior Staff Software Engineer",
-    "Staff Engineer", "Staff Software Engineer",
+    # "Principal Engineer" covers "Principal Software Engineer" on LinkedIn
+    "Principal Engineer",
+    # "Staff Engineer" covers "Staff Software Engineer" and "Senior Staff" variants
+    "Staff Engineer",
 ]
 
 # No intern or comms searches for this profile
@@ -60,11 +58,9 @@ COMMS_SEARCH_TERMS = []
 
 HIGH_CONVERSION_COMPANIES = []  # Not used for this profile
 
-LOCATIONS = [
-    "San Francisco, CA",
-    "Oakland, CA",
-    "Berkeley, CA",
-]
+# Single search center — 40mi radius covers SF, Oakland, Berkeley, and upper Peninsula
+SEARCH_CENTER = "Orinda, CA"
+SEARCH_RADIUS = 40  # miles
 
 WATCHLIST_COMPANIES = [
     "anthropic", "nvidia", "openai", "stripe", "plaid", "perplexity",
@@ -79,9 +75,15 @@ WATCHLIST_COMPANIES = [
 ]
 
 EXCLUDE_INDUSTRIES = [
-    "hospital", "clinic", "insurance", "legal",
-    "law firm", "pharmaceutical", "pharma", "dental", "therapy", "staffing",
-    "recruiting agency", "we are hiring on behalf", "blockchain",
+    "hospital", "clinic", "legal",
+    "pharmaceutical", "pharma", "dental", "therapy", "staffing",
+    "recruiting agency", "we are hiring on behalf", "blockchain", "cryptocurrency",
+]
+
+# Job aggregator sites — exclude only when the company name IS the aggregator
+# (not when the aggregator lists a real company's role)
+JOB_AGGREGATORS = [
+    "lensa", "ziprecruiter", "remotehunter", "jobs via dice",
 ]
 
 REPOST_SIGNALS = [
@@ -92,7 +94,10 @@ REPOST_SIGNALS = [
 
 EXCLUDED_TITLES = [
     "software engineer", "data engineer", "data scientist",
-    "machine learning engineer", "mechanical engineer",
+    "machine learning engineer", "ml engineer",
+    "head of machine learning", "head of ml", "head of data science",
+    "research scientist", "applied scientist",
+    "mechanical engineer",
     "electrical engineer", "hardware engineer",
     "civil engineer", "structural engineer", "chemical engineer",
     "nurse", "physician", "therapist", "dentist", "teacher",
@@ -103,6 +108,16 @@ EXCLUDED_TITLES = [
     "sales development", "business development representative",
     "sdr", "bdr", "account executive entry",
     "sales representative", "sales associate",
+    "product manager", "program manager", "project manager",
+    "category manager", "account manager",
+    "sales specialist", "sales manager",
+    "substation engineer", "power engineer",
+    "security specialist", "information security",
+]
+
+# Companies to skip entirely (non-tech manufacturing/consulting)
+EXCLUDED_COMPANIES = [
+    "foth companies", "pinnacle method",
 ]
 
 
@@ -114,9 +129,20 @@ def init_db():
             job_url TEXT PRIMARY KEY,
             title TEXT,
             company TEXT,
-            date_found TEXT
+            date_found TEXT,
+            outcome TEXT,
+            score INTEGER
         )
     """)
+    # Migrate: add columns if missing (existing DBs won't have them)
+    try:
+        conn.execute("ALTER TABLE seen_jobs ADD COLUMN outcome TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE seen_jobs ADD COLUMN score INTEGER")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS applications (
             job_url TEXT PRIMARY KEY,
@@ -135,10 +161,18 @@ def is_seen(conn, job_url):
     return conn.execute("SELECT 1 FROM seen_jobs WHERE job_url = ?", (job_url,)).fetchone() is not None
 
 
-def mark_seen(conn, job_url, title="", company=""):
+def get_seen_score(conn, job_url):
+    """Get the stored outcome and score for a previously seen job."""
+    row = conn.execute("SELECT outcome, score FROM seen_jobs WHERE job_url = ?", (job_url,)).fetchone()
+    if row:
+        return row[0], row[1]  # outcome, score
+    return None, None
+
+
+def mark_seen(conn, job_url, title="", company="", outcome="", score=None):
     conn.execute(
-        "INSERT OR IGNORE INTO seen_jobs (job_url, title, company, date_found) VALUES (?, ?, ?, ?)",
-        (job_url, str(title), str(company), datetime.now(timezone.utc).isoformat())
+        "INSERT OR IGNORE INTO seen_jobs (job_url, title, company, date_found, outcome, score) VALUES (?, ?, ?, ?, ?, ?)",
+        (job_url, str(title), str(company), datetime.now(timezone.utc).isoformat(), outcome, score)
     )
     conn.commit()
 
@@ -200,6 +234,12 @@ def quick_filter(job):
     company = str(job.get("company") or "").lower()
     title_company = title + " " + company
 
+    if any(c in company for c in EXCLUDED_COMPANIES):
+        return False, "excluded company"
+    # Job aggregators: exclude only when the company name IS the aggregator
+    # (real companies listing through aggregators will have the actual company name)
+    if any(company.strip() == agg or company.startswith(agg) for agg in JOB_AGGREGATORS):
+        return False, "job aggregator listing"
     if any(term in title_company for term in EXCLUDE_INDUSTRIES):
         return False, "excluded industry"
     if any(t in title for t in EXCLUDED_TITLES):
@@ -290,12 +330,13 @@ def claude_relevance_check(job):
 
 Target profile:
 - Roles: Engineering Manager, Senior Engineering Manager, Director of Engineering, Head of Engineering, VP Engineering, Principal/Staff Engineer
-- Background: MIT BS/MS CS+EE. Built teams from 0→20+ multiple times. Led enterprise auth platform securing tens of millions of daily users at Wells Fargo. Currently building production AI platform at Lexicon Branding (Next.js, Supabase, LLM workflows). Independent consulting for ML-driven energy trading, platform migrations. $2M+ fraud savings, multiple US patents.
-- Industries: Fintech, authentication/identity, AI/ML systems, platform engineering, developer tools, energy/trading (no healthcare, insurance, staffing)
+- Background: MIT BS/MS CS+EE. Built teams from 0→20+ multiple times. Led enterprise auth platform securing tens of millions of daily users at Wells Fargo. Currently building production AI platform at Lexicon Branding (Next.js, Supabase, LLM workflows). Independent consulting for energy trading ops, platform migrations. $2M+ fraud savings, multiple US patents.
+- AI experience: Strong at building systems that USE AI (LLM integration, function-calling frameworks, AI-enabled platforms). NOT an ML/data science practitioner — exclude roles where core job is training models, ML research, or building ML infrastructure.
+- Industries: Fintech, authentication/identity, platform engineering, developer tools, AI-enabled products (not pure ML/AI research), energy/trading (no healthcare, insurance, staffing)
 - Location: Bay Area (SF, Oakland, Berkeley, East Bay) or Remote. South Bay acceptable but less preferred.
 - Compensation: $200k+ total comp baseline
 - Experience: 20+ years — roles should be senior IC (Staff+) or management/director level
-- Exclude: entry-level roles, junior roles, BDR/SDR, roles requiring < 10 years experience, non-tech industries, contract/temp roles
+- Exclude: entry-level roles, junior roles, BDR/SDR, roles requiring < 10 years experience, non-tech industries, contract/temp roles, pure ML/data science roles, ML research positions
 
 {rejection_context}
 
@@ -481,6 +522,7 @@ def post_to_job_agent(job, analysis):
             "url": str(job.get("job_url") or ""),
             "description": str(job.get("description") or ""),
             "source": str(job.get("site") or "linkedin"),
+            "fit_score": analysis.get("fit_score"),
         }
         resp = requests.post(
             INGEST_URL,
@@ -496,6 +538,10 @@ def post_to_job_agent(job, analysis):
         logging.warning(f"post_to_job_agent error: {e}")
 
 
+# Track title+company combos seen this run to avoid duplicate Claude calls
+_seen_this_run = set()
+
+
 def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
     alerted = 0
     for _, job in jobs_df.iterrows():
@@ -504,10 +550,19 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         if not job_url or is_seen(conn, job_url):
             continue
 
+        # Dedup same title+company across locations within this run — keep first (local > remote)
+        dedup_key = (str(job_dict.get("title") or "").lower(), str(job_dict.get("company") or "").lower())
+        if dedup_key in _seen_this_run:
+            logging.info(f"Dedup (same role, different location): {job_dict.get('title')} @ {job_dict.get('company')}")
+            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"))
+            continue
+        _seen_this_run.add(dedup_key)
+
         passed, reason = quick_filter(job_dict)
         if not passed:
             logging.info(f"Quick filtered: {job_dict.get('title')} @ {job_dict.get('company')} -- {reason}")
-            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"))
+            log_outcome(job_url, "quick_filtered", reason=reason)
+            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="quick_filtered")
             continue
 
         # Fetch full description, applicant count, and repost flag from page HTML
@@ -525,7 +580,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         passes, age_hours, applicant_count = passes_or_filter(job_dict, is_repost=repost)
         if not passes:
             logging.info(f"OR filtered ({age_hours:.1f}h old, {applicant_count} applicants): {job_dict.get('title')} @ {job_dict.get('company')}")
-            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"))
+            log_outcome(job_url, "freshness_filtered", reason=f"{age_hours:.1f}h old, {applicant_count} applicants")
+            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="freshness_filtered")
             continue
 
         # Intern gate: only high-conversion companies
@@ -542,44 +598,98 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         else:
             analysis = claude_relevance_check(job_dict)
 
+        fit_score = analysis.get("fit_score", 0)
         min_score = 4 if is_intern else (5 if is_remote else 5)
-        if not analysis.get("relevant") or analysis.get("fit_score", 0) < min_score:
+        if not analysis.get("relevant") or fit_score < min_score:
             logging.info(f"Claude filtered: {job_dict.get('title')} @ {job_dict.get('company')} -- {analysis.get('reason')}")
-            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"))
+            log_outcome(job_url, "claude_filtered", score=fit_score, reason=analysis.get("reason", ""))
+            mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="claude_filtered", score=fit_score)
             continue
 
         send_discord_alert(job_dict, analysis, is_intern=is_intern, is_prompt_eng=is_prompt_eng, is_repost=repost, is_comms=is_comms)
         post_to_job_agent(job_dict, analysis)
-        mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"))
+        mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="alerted", score=fit_score)
         alerted += 1
-        logging.info(f"Alerted: {job_dict.get('title')} @ {job_dict.get('company')} (score {analysis.get('fit_score')})")
+        log_outcome(job_url, "alerted", score=fit_score, reason=analysis.get("reason", ""))
+        logging.info(f"Alerted: {job_dict.get('title')} @ {job_dict.get('company')} (score {fit_score})")
 
     return alerted
+
+
+import csv
+
+OVERLAP_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "query_overlap.csv")
+
+
+def log_query_results(search_term, location, jobs_df, run_ts):
+    """Log each job_url seen per query to CSV for overlap analysis, with position."""
+    os.makedirs(os.path.dirname(OVERLAP_LOG), exist_ok=True)
+    file_exists = os.path.exists(OVERLAP_LOG)
+    with open(OVERLAP_LOG, "a", newline="") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["timestamp", "search_term", "location", "position", "job_url", "title", "company"])
+        for position, (_, job) in enumerate(jobs_df.iterrows(), 1):
+            writer.writerow([
+                run_ts,
+                search_term,
+                location,
+                position,
+                str(job.get("job_url", "")),
+                str(job.get("title", "")),
+                str(job.get("company", "")),
+            ])
+
+
+# Outcome tracking: populated during process_jobs, keyed by job_url
+_job_outcomes = {}  # url -> {"outcome": str, "score": int|None, "reason": str}
+
+OUTCOME_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "job_outcomes.csv")
+
+
+def log_outcome(job_url, outcome, score=None, reason=""):
+    """Record outcome for a job URL (for later correlation with search terms)."""
+    _job_outcomes[job_url] = {"outcome": outcome, "score": score, "reason": reason}
+
+
+def write_outcome_log(run_ts):
+    """Write outcomes to CSV, correlatable with query_overlap.csv by job_url + timestamp."""
+    os.makedirs(os.path.dirname(OUTCOME_LOG), exist_ok=True)
+    file_exists = os.path.exists(OUTCOME_LOG)
+    with open(OUTCOME_LOG, "a", newline="") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["timestamp", "job_url", "outcome", "score", "reason"])
+        for url, data in _job_outcomes.items():
+            writer.writerow([run_ts, url, data["outcome"], data["score"] or "", data["reason"]])
 
 
 def run():
     logging.info("=== Scraper run started ===")
     conn = init_db()
     total_alerted = 0
+    run_ts = datetime.now(timezone.utc).isoformat()
 
-    # Bay Area searches
+    # Bay Area searches — single radius from Orinda covers SF, Oakland, Berkeley, Peninsula
+    # Request 100 results to capture the long tail and measure value by position
     for search_term in SEARCH_TERMS:
-        for location in LOCATIONS:
-            try:
-                jobs_df = scrape_jobs(
-                    site_name=["linkedin"],
-                    search_term=search_term,
-                    location=location,
-                    results_wanted=30,
-                    hours_old=24,
-                    job_type="fulltime",
-                )
-                if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' in {location}: {len(jobs_df)} results")
-                    total_alerted += process_jobs(jobs_df, conn)
-            except Exception as e:
-                logging.error(f"Error scraping '{search_term}' in {location}: {e}")
-            time.sleep(2)
+        try:
+            jobs_df = scrape_jobs(
+                site_name=["linkedin"],
+                search_term=search_term,
+                location="Orinda, CA",
+                distance=40,
+                results_wanted=100,
+                hours_old=24,
+                job_type="fulltime",
+            )
+            if jobs_df is not None and not jobs_df.empty:
+                logging.info(f"'{search_term}' (40mi from Orinda): {len(jobs_df)} results")
+                log_query_results(search_term, "Orinda, CA (40mi)", jobs_df, run_ts)
+                total_alerted += process_jobs(jobs_df, conn)
+        except Exception as e:
+            logging.error(f"Error scraping '{search_term}': {e}")
+        time.sleep(2)
 
     # Remote searches
     for search_term in ["Engineering Manager remote", "Senior Engineering Manager remote", "Director of Engineering remote"]:
@@ -588,14 +698,14 @@ def run():
                 site_name=["linkedin"],
                 search_term=search_term,
                 location="United States",
-                results_wanted=30,
+                results_wanted=100,
                 hours_old=24,
                 job_type="fulltime",
                 is_remote=True,
-
             )
             if jobs_df is not None and not jobs_df.empty:
                 logging.info(f"'{search_term}' (remote): {len(jobs_df)} results")
+                log_query_results(search_term, "United States (remote)", jobs_df, run_ts)
                 total_alerted += process_jobs(jobs_df, conn, is_remote=True)
         except Exception as e:
             logging.error(f"Error scraping remote '{search_term}': {e}")
@@ -603,6 +713,87 @@ def run():
 
     conn.close()
     logging.info(f"=== Scraper run complete. Jobs alerted: {total_alerted} ===")
+
+    # Write outcome log and print overlap summary
+    try:
+        write_outcome_log(run_ts)
+        _print_overlap_summary(run_ts)
+    except Exception as e:
+        logging.warning(f"Post-run analysis failed: {e}")
+
+    # Clear run-level state
+    _seen_this_run.clear()
+    _job_outcomes.clear()
+
+
+def _print_overlap_summary(run_ts):
+    """Analyze query overlap from the CSV for the current run, enriched with scores."""
+    with open(OVERLAP_LOG, "r") as f:
+        reader = csv.DictReader(f)
+        rows = [r for r in reader if r["timestamp"] == run_ts]
+
+    # Map: job_url -> set of search terms that found it
+    url_to_terms = {}
+    url_to_info = {}  # url -> {title, company}
+    for r in rows:
+        url = r["job_url"]
+        if url not in url_to_terms:
+            url_to_terms[url] = set()
+        url_to_terms[url].add(r["search_term"])
+        url_to_info[url] = {"title": r.get("title", ""), "company": r.get("company", "")}
+
+    # Get scores from this run's outcomes + historical seen_jobs
+    url_scores = {}
+    for url in url_to_terms:
+        if url in _job_outcomes:
+            url_scores[url] = _job_outcomes[url].get("score")
+        else:
+            # Look up from seen_jobs DB
+            conn = sqlite3.connect(DB_PATH)
+            outcome, score = get_seen_score(conn, url)
+            conn.close()
+            url_scores[url] = score
+
+    total_urls = len(url_to_terms)
+    unique_to_one = sum(1 for terms in url_to_terms.values() if len(terms) == 1)
+    found_by_multiple = sum(1 for terms in url_to_terms.values() if len(terms) > 1)
+
+    # Per-term stats with score breakdown
+    term_counts = {}
+    term_unique = {}
+    term_high_score = {}  # terms that found score >= 7
+    term_alerted = {}     # terms that found alerted jobs
+    for url, terms in url_to_terms.items():
+        score = url_scores.get(url)
+        for t in terms:
+            term_counts[t] = term_counts.get(t, 0) + 1
+            if len(terms) == 1:
+                term_unique[t] = term_unique.get(t, 0) + 1
+            if score is not None and score >= 7:
+                term_high_score[t] = term_high_score.get(t, 0) + 1
+            outcome = _job_outcomes.get(url, {}).get("outcome", "")
+            if outcome == "alerted":
+                term_alerted[t] = term_alerted.get(t, 0) + 1
+
+    logging.info(f"=== Query overlap: {total_urls} unique URLs, {found_by_multiple} found by 2+ queries, {unique_to_one} unique to one query ===")
+    logging.info(f"  {'Search term':<40} {'Total':>6} {'Unique':>7} {'Score7+':>8} {'Alerted':>8}")
+    for term in sorted(term_counts, key=lambda t: term_counts[t], reverse=True):
+        uniq = term_unique.get(term, 0)
+        high = term_high_score.get(term, 0)
+        alert = term_alerted.get(term, 0)
+        logging.info(f"  {term:<40} {term_counts[term]:>6} {uniq:>7} {high:>8} {alert:>8}")
+
+    # List high-score jobs unique to one query (these are the ones that justify specialized searches)
+    exclusive_high = []
+    for url, terms in url_to_terms.items():
+        score = url_scores.get(url)
+        if len(terms) == 1 and score is not None and score >= 7:
+            info = url_to_info.get(url, {})
+            exclusive_high.append((list(terms)[0], score, info.get("title", ""), info.get("company", "")))
+    if exclusive_high:
+        logging.info(f"  --- High-score jobs (7+) found by only one query ---")
+        for term, score, title, company in sorted(exclusive_high, key=lambda x: -x[1]):
+            logging.info(f"    [{score}/10] '{term}' -> {title} @ {company}")
 
 
 if __name__ == "__main__":

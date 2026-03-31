@@ -9,6 +9,7 @@ create table if not exists jobs (
   description text,
   source text,
   status text not null default 'new' check (status in ('new','saved','applied','interviewing','offer','rejected')),
+  fit_score integer,
   notes text,
   created_at timestamptz not null default now()
 );

@@ -15,3 +15,6 @@ job-scout/*.db
 job-scout/logs/
 job-scout/.venv/
 job-scout/output/
+.claude/worktrees/
+job-scout/#*#
+job-scout/.#*
