@@ -48,7 +48,15 @@
       "Bash(git rm:*)",
       "Bash(git reset:*)",
       "Bash(mkdir -p ~/src/job-agent/.claude/inbox/read)",
-      "Bash(mv ~/src/job-agent/.claude/inbox/2026-03-31-from-ras.md ~/src/job-agent/.claude/inbox/read/)"
+      "Bash(mv ~/src/job-agent/.claude/inbox/2026-03-31-from-ras.md ~/src/job-agent/.claude/inbox/read/)",
+      "Bash(while read:*)",
+      "Bash(do grep:*)",
+      "Bash(head -3 echo \"--- $d ---\" done)",
+      "Bash(launchctl load:*)",
+      "Bash(launchctl list:*)",
+      "Bash(launchctl start:*)",
+      "Bash(xelatex -interaction=nonstopmode RaySchnitzler2c.tex)",
+      "Bash(grep -l \"Open.Sans\\\\|opensans\\\\|fontspec\" ~/Library/CloudStorage/Dropbox/RAS/Bugcrowd/RaySchnitzler*.tex ~/Library/CloudStorage/Dropbox/RAS/Bugcrowd/RaySchnitzler*.typ)"
     ]
   }
 }

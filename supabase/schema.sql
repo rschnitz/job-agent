@@ -41,10 +41,27 @@ create table if not exists conversations (
   created_at timestamptz not null default now()
 );
 
--- Disable RLS (single-user app, no auth needed)
-alter table jobs disable row level security;
-alter table profiles disable row level security;
-alter table conversations disable row level security;
+-- Enable RLS with permissive policies (single-user, no auth yet)
+-- Anon key gets full access; tighten when auth is added
+alter table jobs enable row level security;
+alter table profiles enable row level security;
+alter table conversations enable row level security;
+
+-- Jobs: anon can read, service_role can write (API routes use service_role)
+create policy "jobs_read" on jobs for select using (true);
+create policy "jobs_insert" on jobs for insert with check (true);
+create policy "jobs_update" on jobs for update using (true);
+create policy "jobs_delete" on jobs for delete using (true);
+
+-- Profiles: same
+create policy "profiles_read" on profiles for select using (true);
+create policy "profiles_insert" on profiles for insert with check (true);
+create policy "profiles_update" on profiles for update using (true);
+
+-- Conversations: same
+create policy "conversations_read" on conversations for select using (true);
+create policy "conversations_insert" on conversations for insert with check (true);
+create policy "conversations_update" on conversations for update using (true);
 
 -- Seed default profile (upsert so re-running schema is safe)
 insert into profiles (id, resume_text, skills, preferences) values (

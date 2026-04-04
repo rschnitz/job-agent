@@ -456,9 +456,40 @@ def claude_comms_check(job):
     return claude_relevance_check(job)
 
 
-def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_repost=False, is_comms=False):
-    mention = f"<@{DISCORD_USER_ID}>" if DISCORD_USER_ID else "@here"
+def determine_urgency(fit_score, age_hours, applicant_count):
+    """Determine urgency tier based on score, freshness, and applicant count.
 
+    Tiers (overlapping ranges, highest matching tier wins):
+      URGENT: score 8+ AND (<1h OR <=25 applicants)  [25 is temporary until counts are accurate]
+      HIGH:   score 6+ AND (<4h OR <25 applicants)
+      MEDIUM: score 5+ AND (<24h OR <50 applicants)
+      LOW:    everything else
+    """
+    score = fit_score or 0
+    fresh_1h = age_hours is not None and age_hours < 1
+    fresh_4h = age_hours is not None and age_hours < 4
+    fresh_24h = age_hours is not None and age_hours < 24
+    few_25 = applicant_count is not None and applicant_count <= 25  # temporary threshold
+    few_50 = applicant_count is not None and applicant_count < 50
+
+    if score >= 8 and (fresh_1h or few_25):
+        return "URGENT"
+    if score >= 6 and (fresh_4h or few_25):
+        return "HIGH"
+    if score >= 5 and (fresh_24h or few_50):
+        return "MEDIUM"
+    return "LOW"
+
+
+URGENCY_CONFIG = {
+    "URGENT": {"color": "FF0000", "prefix": "🚨 URGENT", "ping": True},
+    "HIGH":   {"color": "FF8C00", "prefix": "⚡ HIGH",   "ping": True},
+    "MEDIUM": {"color": "03b2f8", "prefix": "📋",        "ping": False},
+    "LOW":    {"color": "808080", "prefix": "📋",        "ping": False},
+}
+
+
+def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_repost=False, is_comms=False):
     applicants = job.get("applicants")
     date_posted = job.get("date_posted")
     company_lower = str(job.get("company") or "").lower()
@@ -475,21 +506,36 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
         except Exception:
             pass
 
+    fit_score = analysis.get("fit_score", 0)
+    try:
+        n_applicants = int(applicants) if applicants is not None else None
+    except (ValueError, TypeError):
+        n_applicants = None
+
+    urgency = determine_urgency(fit_score, age_hours, n_applicants)
+    urg_cfg = URGENCY_CONFIG[urgency]
+
+    # Ping user only for URGENT and HIGH
+    if urg_cfg["ping"]:
+        mention = f"<@{DISCORD_USER_ID}>" if DISCORD_USER_ID else "@here"
+    else:
+        mention = ""
+
     is_hot = not is_repost and age_hours is not None and age_hours <= 1
 
     if is_watchlist:
         color = "FFD700"
-    elif is_hot:
-        color = "00FF7F"
     else:
-        color = "03b2f8"
+        color = urg_cfg["color"]
 
     flags = []
+    if urgency in ("URGENT", "HIGH"):
+        flags.append(f"{urg_cfg['prefix']} — act now")
     if is_repost:
         flags.append("♻️ REPOST -- timestamp unreliable, likely stale")
     elif is_hot:
         flags.append("🔥 FRESH -- under 1 hour old")
-    elif age_hours is not None and age_hours <= 2:
+    elif age_hours is not None and age_hours <= 4:
         flags.append(f"🔥 FRESH -- posted {age_hours:.0f}h ago")
     if is_watchlist:
         flags.append("⭐ WATCHLIST COMPANY")
@@ -502,19 +548,29 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
     if applicants is not None:
         try:
             n = int(applicants)
-            flags.append(f"👀 {n} applicant{'s' if n != 1 else ''}")
+            # LinkedIn uses "Be among the first 25 applicants" as a bucket (0-24 actual)
+            if n == 25:
+                flags.append("👀 <25 applicants")
+            else:
+                flags.append(f"👀 {n} applicant{'s' if n != 1 else ''}")
         except (ValueError, TypeError):
             pass
 
-    posted_str = f"{age_hours:.1f}h ago" if age_hours is not None else str(date_posted) if date_posted else "Unknown"
-    fit_score = analysis.get("fit_score", "?")
+    # Handle pandas NaN in posted date
+    posted_str = "Unknown"
+    if age_hours is not None:
+        posted_str = f"{age_hours:.1f}h ago"
+    elif date_posted is not None and str(date_posted) not in ("nan", "NaT", "None", ""):
+        posted_str = str(date_posted)
+    fit_score_display = analysis.get("fit_score", "?")
     description_preview = str(job.get("description") or "")[:300] + "..."
 
     embed_description = ("\n".join(flags) + "\n\n" if flags else "") + description_preview
 
+    urgency_label = f"[{urgency}] " if urgency in ("URGENT", "HIGH") else ""
     webhook = DiscordWebhook(
         url=WEBHOOK_URL,
-        content=f"{mention} New job match! Fit score: {fit_score}/10"
+        content=f"{mention} {urgency_label}New job match! Fit score: {fit_score_display}/10".strip()
     )
 
     embed = DiscordEmbed(
@@ -576,7 +632,14 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
     embed.add_embed_field(name="Location", value=str(job.get("location", "N/A")), inline=True)
     embed.add_embed_field(name="Salary", value=salary_str, inline=True)
     embed.add_embed_field(name="Posted", value=posted_str, inline=True)
-    embed.add_embed_field(name="Applicants", value=str(applicants) if applicants is not None else "N/A", inline=True)
+    applicant_str = "N/A"
+    if applicants is not None:
+        try:
+            n = int(applicants)
+            applicant_str = "<25" if n == 25 else str(n)
+        except (ValueError, TypeError):
+            pass
+    embed.add_embed_field(name="Applicants", value=applicant_str, inline=True)
     embed.add_embed_field(name="Source", value=str(job.get("site", "N/A")).capitalize(), inline=True)
     embed.add_embed_field(name="Why it fits", value=str(analysis.get("reason", "N/A")), inline=False)
     embed.set_footer(text="✅ tailor resume  |  📨 mark applied  |  ❌ dismiss")
@@ -601,10 +664,10 @@ def post_to_job_agent(job, analysis):
         except (ValueError, TypeError):
             pass
 
-        # Parse posted date
+        # Parse posted date (guard against pandas NaN/NaT)
         posted_at = None
         dp = job.get("date_posted")
-        if dp:
+        if dp is not None and str(dp) not in ("nan", "NaT", "None", ""):
             try:
                 if hasattr(dp, "isoformat"):
                     posted_at = dp.isoformat()
@@ -624,9 +687,9 @@ def post_to_job_agent(job, analysis):
             "relevance_explanation": analysis.get("reason"),
             "salary_min": sal_min,
             "salary_max": sal_max,
-            "location": str(job.get("location") or ""),
+            "location": str(job.get("location") or "") if str(job.get("location", "")) not in ("nan", "None") else "",
             "posted_at": posted_at,
-            "applicant_count": job.get("applicants"),
+            "applicant_count": int(job["applicants"]) if job.get("applicants") is not None and str(job.get("applicants")) not in ("nan", "None") else None,
         }
         resp = requests.post(
             INGEST_URL,

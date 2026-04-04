@@ -31,6 +31,7 @@ export default function JobDetail() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
+  const [descHtml, setDescHtml] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,6 +42,14 @@ export default function JobDetail() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (job?.url) {
+      fetch(`/api/jobs/description-html?url=${encodeURIComponent(job.url)}`)
+        .then((r) => r.ok ? r.text() : null)
+        .then((html) => { if (html) setDescHtml(html); });
+    }
+  }, [job?.url]);
 
   async function fetchJob() {
     const { data } = await supabase.from("jobs").select("*").eq("id", id).single();
@@ -227,7 +236,7 @@ export default function JobDetail() {
             </CardContent>
           </Card>
 
-          {job.description && (
+          {(descHtml || job.description) && (
             <Card>
               <CardHeader className="pb-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
@@ -235,9 +244,18 @@ export default function JobDetail() {
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-muted-foreground max-h-56 overflow-y-auto whitespace-pre-wrap leading-relaxed">
-                  {job.description}
-                </div>
+                {descHtml ? (
+                  <div
+                    className="text-sm text-muted-foreground max-h-[60vh] overflow-y-auto leading-relaxed prose prose-sm prose-neutral max-w-none"
+                    dangerouslySetInnerHTML={{ __html: descHtml }}
+                  />
+                ) : (
+                  <div className="text-sm text-muted-foreground max-h-[60vh] overflow-y-auto leading-relaxed space-y-2">
+                    {job.description!.split(/\n{2,}/).map((para, i) => (
+                      <p key={i}>{para.replace(/\n/g, ' ')}</p>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
