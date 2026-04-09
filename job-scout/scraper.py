@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 from jobspy import scrape_jobs
 from discord_webhook import DiscordWebhook, DiscordEmbed
 import anthropic
+import sys
+sys.path.insert(0, os.path.expanduser("~/src/job-search-lib"))
+from job_search_lib.scoring import quick_score as lib_quick_score, classify_role, JobResult
+from job_search_lib.compensation import compute_total_comp
 
 load_dotenv()
 
@@ -683,7 +687,7 @@ def post_to_job_agent(job, analysis):
             "description": str(job.get("description") or ""),
             "source": str(job.get("site") or "linkedin"),
             "fit_score": analysis.get("fit_score"),
-            "relevance_score": analysis.get("fit_score"),  # currently same; will diverge with /evaluate
+            "relevance_score": int(job.get("_lib_score")) if job.get("_lib_score") is not None else analysis.get("fit_score"),
             "relevance_explanation": analysis.get("reason"),
             "salary_min": sal_min,
             "salary_max": sal_max,
@@ -731,6 +735,52 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
             log_outcome(job_url, "quick_filtered", reason=reason)
             mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="quick_filtered")
             continue
+
+        # Deterministic scoring via shared lib (no LLM, no HTTP fetch)
+        try:
+            title_str = str(job_dict.get("title") or "")
+            company_str = str(job_dict.get("company") or "")
+            location_str = str(job_dict.get("location") or "")
+            if str(location_str) in ("nan", "None"):
+                location_str = ""
+            salary_hint = ""
+            if job_dict.get("min_amount") and job_dict.get("max_amount"):
+                try:
+                    salary_hint = f"${int(float(job_dict['min_amount']))}-${int(float(job_dict['max_amount']))}"
+                except (ValueError, TypeError):
+                    pass
+            job_id_match = re.search(r'/view/(\d+)', job_url)
+            source_id = job_id_match.group(1) if job_id_match else ""
+            recency_str = str(job_dict.get("date_posted") or "")
+            if recency_str in ("nan", "NaT", "None"):
+                recency_str = ""
+
+            jr = JobResult(
+                source="linkedin",
+                source_id=source_id,
+                title=title_str,
+                company=company_str,
+                location=location_str,
+                url=job_url,
+                recency=recency_str,
+                salary_hint=salary_hint,
+                role_type=classify_role(title_str),
+            )
+            lib_score = lib_quick_score(jr)
+            job_dict["_lib_score"] = lib_score
+            job_dict["_lib_breakdown"] = jr.score_breakdown
+            logging.info(f"Lib score: {lib_score:.0f} for {title_str} @ {company_str} ({jr.score_breakdown})")
+
+            # Low lib scores skip the expensive fetch + Claude steps
+            LIB_SCORE_THRESHOLD = 30  # conservative — let borderline jobs through to Claude
+            if lib_score < LIB_SCORE_THRESHOLD:
+                logging.info(f"Lib filtered ({lib_score:.0f} < {LIB_SCORE_THRESHOLD}): {title_str} @ {company_str}")
+                log_outcome(job_url, "lib_filtered", score=int(lib_score), reason=jr.score_breakdown)
+                mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="lib_filtered", score=int(lib_score))
+                continue
+        except Exception as e:
+            logging.warning(f"Lib scoring failed for {job_dict.get('title')}: {e}")
+            lib_score = None  # fall through to Claude
 
         # Fetch full description, applicant count, and repost flag from page HTML
         full_desc, applicant_count, page_repost = fetch_full_job_details(job_url)

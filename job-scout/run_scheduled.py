@@ -163,6 +163,48 @@ Write results to Supabase (match by URL). Load env from `~/src/job-agent/.env.lo
         pass  # best-effort; message stays in outbox for manual send
 
 
+def update_eval_queue_cache():
+    """Update the eval queue count cache for the status line."""
+    import json
+    import urllib.request
+
+    supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        env_path = os.path.join(SCRIPT_DIR, "..", ".env.local")
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        if k == "NEXT_PUBLIC_SUPABASE_URL":
+                            supabase_url = v
+                        elif k == "SUPABASE_SERVICE_ROLE_KEY":
+                            supabase_key = v
+    if not supabase_url or not supabase_key:
+        return
+
+    try:
+        hdrs = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
+        req = urllib.request.Request(
+            f"{supabase_url}/rest/v1/jobs?fit_explanation=is.null&status=neq.rejected&fit_score=gte.7&select=fit_score",
+            headers=hdrs
+        )
+        awaiting = len(json.loads(urllib.request.urlopen(req).read()))
+        req2 = urllib.request.Request(
+            f"{supabase_url}/rest/v1/jobs?fit_explanation=not.is.null&status=neq.rejected&select=fit_score",
+            headers=hdrs
+        )
+        evaluated = len(json.loads(urllib.request.urlopen(req2).read()))
+
+        cache_path = os.path.join(SCRIPT_DIR, "logs", ".eval_queue_count")
+        with open(cache_path, "w") as f:
+            json.dump({"awaiting": awaiting, "evaluated": evaluated, "timestamp": datetime.now(timezone.utc).isoformat()}, f)
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     if skip_scrape():
         sys.exit(0)
@@ -174,3 +216,4 @@ if __name__ == "__main__":
     run()
     record_run()
     request_ras_evaluation()
+    update_eval_queue_cache()
