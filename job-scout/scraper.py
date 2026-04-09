@@ -510,13 +510,18 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
         except Exception:
             pass
 
-    fit_score = analysis.get("fit_score", 0)
+    haiku_score = analysis.get("fit_score", 0)
+    lib_score_val = job.get("_lib_score")
     try:
         n_applicants = int(applicants) if applicants is not None else None
     except (ValueError, TypeError):
         n_applicants = None
 
-    urgency = determine_urgency(fit_score, age_hours, n_applicants)
+    # Use the higher of the two scores for urgency determination
+    # Lib score is 0-100, Haiku is 1-10 — normalize lib to 1-10 for urgency
+    lib_normalized = int(lib_score_val / 10) if lib_score_val is not None else 0
+    urgency_score = max(haiku_score, lib_normalized)
+    urgency = determine_urgency(urgency_score, age_hours, n_applicants)
     urg_cfg = URGENCY_CONFIG[urgency]
 
     # Ping user only for URGENT and HIGH
@@ -566,7 +571,11 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
         posted_str = f"{age_hours:.1f}h ago"
     elif date_posted is not None and str(date_posted) not in ("nan", "NaT", "None", ""):
         posted_str = str(date_posted)
-    fit_score_display = analysis.get("fit_score", "?")
+    # Dual score display
+    haiku_display = analysis.get("fit_score", "?")
+    lib_display = f"{int(lib_score_val)}" if lib_score_val is not None else "?"
+    score_line = f"Haiku: {haiku_display}/10 | Lib: {lib_display}/100"
+
     description_preview = str(job.get("description") or "")[:300] + "..."
 
     embed_description = ("\n".join(flags) + "\n\n" if flags else "") + description_preview
@@ -574,7 +583,7 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
     urgency_label = f"[{urgency}] " if urgency in ("URGENT", "HIGH") else ""
     webhook = DiscordWebhook(
         url=WEBHOOK_URL,
-        content=f"{mention} {urgency_label}New job match! Fit score: {fit_score_display}/10".strip()
+        content=f"{mention} {urgency_label}New job match! {score_line}".strip()
     )
 
     embed = DiscordEmbed(
@@ -645,6 +654,9 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
             pass
     embed.add_embed_field(name="Applicants", value=applicant_str, inline=True)
     embed.add_embed_field(name="Source", value=str(job.get("site", "N/A")).capitalize(), inline=True)
+    lib_breakdown = job.get("_lib_breakdown", "")
+    if lib_breakdown:
+        embed.add_embed_field(name="Lib Score", value=f"{lib_display}/100 ({lib_breakdown})", inline=False)
     embed.add_embed_field(name="Why it fits", value=str(analysis.get("reason", "N/A")), inline=False)
     embed.set_footer(text="✅ tailor resume  |  📨 mark applied  |  ❌ dismiss")
 
