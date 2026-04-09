@@ -715,11 +715,17 @@ _seen_this_run = set()
 
 def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
     alerted = 0
+    seen_count = 0
+    new_count = 0
     for _, job in jobs_df.iterrows():
         job_dict = job.to_dict()
         job_url = str(job_dict.get("job_url", ""))
-        if not job_url or is_seen(conn, job_url):
+        if not job_url:
             continue
+        if is_seen(conn, job_url):
+            seen_count += 1
+            continue
+        new_count += 1
 
         # Dedup same title+company across locations within this run — keep first (local > remote)
         dedup_key = (str(job_dict.get("title") or "").lower(), str(job_dict.get("company") or "").lower())
@@ -772,7 +778,7 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
             logging.info(f"Lib score: {lib_score:.0f} for {title_str} @ {company_str} ({jr.score_breakdown})")
 
             # Low lib scores skip the expensive fetch + Claude steps
-            LIB_SCORE_THRESHOLD = 30  # conservative — let borderline jobs through to Claude
+            LIB_SCORE_THRESHOLD = 0  # TEMPORARY: disabled for parallel comparison (normally 30)
             if lib_score < LIB_SCORE_THRESHOLD:
                 logging.info(f"Lib filtered ({lib_score:.0f} < {LIB_SCORE_THRESHOLD}): {title_str} @ {company_str}")
                 log_outcome(job_url, "lib_filtered", score=int(lib_score), reason=jr.score_breakdown)
@@ -823,6 +829,18 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
             mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="claude_filtered", score=fit_score)
             continue
 
+        # Late discovery flag: newly seen with high applicant count
+        discovery_applicants = job_dict.get("applicants")
+        if discovery_applicants is not None:
+            try:
+                n = int(discovery_applicants)
+                if n > 50:
+                    logging.warning(f"LATE DISCOVERY ({n} applicants): {job_dict.get('title')} @ {job_dict.get('company')} -- investigate search coverage")
+                elif n > 25:
+                    logging.warning(f"Late discovery ({n} applicants): {job_dict.get('title')} @ {job_dict.get('company')}")
+            except (ValueError, TypeError):
+                pass
+
         send_discord_alert(job_dict, analysis, is_intern=is_intern, is_prompt_eng=is_prompt_eng, is_repost=repost, is_comms=is_comms)
         post_to_job_agent(job_dict, analysis)
         mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="alerted", score=fit_score)
@@ -830,6 +848,7 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         log_outcome(job_url, "alerted", score=fit_score, reason=analysis.get("reason", ""))
         logging.info(f"Alerted: {job_dict.get('title')} @ {job_dict.get('company')} (score {fit_score})")
 
+    logging.info(f"  Batch stats: {seen_count} seen, {new_count} new, {alerted} alerted")
     return alerted
 
 
@@ -864,6 +883,37 @@ _job_outcomes = {}  # url -> {"outcome": str, "score": int|None, "reason": str}
 OUTCOME_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "job_outcomes.csv")
 
 
+def _update_applicant_counts(conn):
+    """Re-fetch applicant counts for high-rated, low-applicant seen jobs."""
+    MAX_UPDATES = 10  # limit HTTP requests per run
+    rows = conn.execute(
+        """SELECT job_url, title, company, score FROM seen_jobs
+           WHERE outcome = 'alerted' AND score >= 7
+           ORDER BY score DESC LIMIT ?""",
+        (MAX_UPDATES * 3,)  # fetch more than we'll update, to filter
+    ).fetchall()
+
+    updated = 0
+    for url, title, company, score in rows:
+        if updated >= MAX_UPDATES:
+            break
+        # Only re-check from cache (no new HTTP fetch — use cache TTL)
+        cached_html, _, _ = _cache_get(url)
+        if not cached_html:
+            continue
+        _, new_count, _ = _parse_job_page(cached_html)
+        if new_count is not None:
+            conn.execute(
+                "UPDATE seen_jobs SET score = ? WHERE job_url = ?",
+                (score, url)  # keep score, just logging
+            )
+            updated += 1
+
+    if updated:
+        conn.commit()
+        logging.info(f"Updated applicant counts for {updated} high-rated jobs")
+
+
 def log_outcome(job_url, outcome, score=None, reason=""):
     """Record outcome for a job URL (for later correlation with search terms)."""
     _job_outcomes[job_url] = {"outcome": outcome, "score": score, "reason": reason}
@@ -887,8 +937,17 @@ def run():
     total_alerted = 0
     run_ts = datetime.now(timezone.utc).isoformat()
 
+    # Determine hours_old based on time of day
+    # During frequent runs (daytime), use short window to maximize fresh results
+    # During infrequent runs (overnight), use longer window as safety net
+    from zoneinfo import ZoneInfo
+    pt_hour = datetime.now(ZoneInfo("America/Los_Angeles")).hour
+    if 7 <= pt_hour < 19:
+        search_hours = 4   # daytime: tight window, most results will be fresh
+    else:
+        search_hours = 24  # overnight: wider safety net
+
     # Bay Area searches — single radius from Orinda covers SF, Oakland, Berkeley, Peninsula
-    # Request 100 results to capture the long tail and measure value by position
     for search_term in SEARCH_TERMS:
         try:
             jobs_df = scrape_jobs(
@@ -897,11 +956,11 @@ def run():
                 location="Orinda, CA",
                 distance=40,
                 results_wanted=100,
-                hours_old=24,
+                hours_old=search_hours,
                 job_type="fulltime",
             )
             if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (40mi from Orinda): {len(jobs_df)} results")
+                logging.info(f"'{search_term}' (40mi from Orinda, {search_hours}h): {len(jobs_df)} results")
                 log_query_results(search_term, "Orinda, CA (40mi)", jobs_df, run_ts)
                 total_alerted += process_jobs(jobs_df, conn)
         except Exception as e:
@@ -916,17 +975,64 @@ def run():
                 search_term=search_term,
                 location="United States",
                 results_wanted=100,
-                hours_old=24,
+                hours_old=search_hours,
                 job_type="fulltime",
                 is_remote=True,
             )
             if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (remote): {len(jobs_df)} results")
+                logging.info(f"'{search_term}' (remote, {search_hours}h): {len(jobs_df)} results")
                 log_query_results(search_term, "United States (remote)", jobs_df, run_ts)
                 total_alerted += process_jobs(jobs_df, conn, is_remote=True)
         except Exception as e:
             logging.error(f"Error scraping remote '{search_term}': {e}")
         time.sleep(2)
+
+    # Daily deep search: domain-specific terms with wider window
+    # Catches niche roles that rank low in generic searches
+    DEEP_SEARCH_TERMS = [
+        "Engineering Manager identity",
+        "Engineering Manager authentication",
+        "Engineering Manager security platform",
+    ]
+    DEEP_SEARCH_INTERVAL_HOURS = 12
+    deep_search_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_deep_search")
+    run_deep = True
+    try:
+        with open(deep_search_file) as f:
+            last_deep = datetime.fromisoformat(f.read().strip())
+        if (datetime.now(timezone.utc) - last_deep).total_seconds() < DEEP_SEARCH_INTERVAL_HOURS * 3600:
+            run_deep = False
+    except (FileNotFoundError, ValueError):
+        pass
+
+    if run_deep:
+        logging.info("Running deep domain-specific search (72h window)")
+        for search_term in DEEP_SEARCH_TERMS:
+            try:
+                jobs_df = scrape_jobs(
+                    site_name=["linkedin"],
+                    search_term=search_term,
+                    location="Orinda, CA",
+                    distance=40,
+                    results_wanted=50,
+                    hours_old=72,
+                    job_type="fulltime",
+                )
+                if jobs_df is not None and not jobs_df.empty:
+                    logging.info(f"'{search_term}' (deep, 72h): {len(jobs_df)} results")
+                    log_query_results(search_term, "Orinda, CA (deep)", jobs_df, run_ts)
+                    total_alerted += process_jobs(jobs_df, conn)
+            except Exception as e:
+                logging.error(f"Error in deep search '{search_term}': {e}")
+            time.sleep(2)
+        with open(deep_search_file, "w") as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+
+    # Update applicant counts for high-rated seen jobs
+    try:
+        _update_applicant_counts(conn)
+    except Exception as e:
+        logging.warning(f"Applicant count update failed: {e}")
 
     conn.close()
     logging.info(f"=== Scraper run complete. Jobs alerted: {total_alerted} ===")
