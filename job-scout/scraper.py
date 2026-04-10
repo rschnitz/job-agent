@@ -658,7 +658,7 @@ def send_discord_alert(job, analysis, is_intern=False, is_prompt_eng=False, is_r
     if lib_breakdown:
         embed.add_embed_field(name="Lib Score", value=f"{lib_display}/100 ({lib_breakdown})", inline=False)
     embed.add_embed_field(name="Why it fits", value=str(analysis.get("reason", "N/A")), inline=False)
-    embed.set_footer(text="✅ tailor resume  |  📨 mark applied  |  ❌ dismiss")
+    embed.set_footer(text="✅ prepare application  |  📨 mark applied  |  ❌ dismiss")
 
     webhook.add_embed(embed)
     webhook.execute()

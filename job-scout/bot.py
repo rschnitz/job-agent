@@ -243,58 +243,86 @@ async def on_raw_reaction_add(payload):
 
     message = await channel.fetch_message(payload.message_id)
 
-    # ── Tailor resume ──────────────────────────────────────────────────────
+    # ── Tailor resume (delegate to RAS via inbox) ──────────────────────────
     if emoji == "✅":
         job_url = None
         role_name = "this role"
-        custom_prompt = ""
+        company_name = "Unknown"
 
-        # #requests channel: handled conversationally via on_message now
         if payload.channel_id == REQUESTS_CHANNEL_ID:
             await channel.send(
                 f"<@{payload.user_id}> Just post a URL or PDF in this channel and I'll ask what you need."
             )
             return
         else:
-            # Job alerts channel: embeds from scrapers
             if not message.embeds:
                 return
             embed = message.embeds[0]
             job_url = embed.url
             role_name = embed.title or "this role"
+            # Parse "Title @ Company" from embed title
+            if " @ " in role_name:
+                parts = role_name.split(" @ ", 1)
+                role_name = parts[0]
+                company_name = parts[1]
 
         if not job_url:
             await channel.send(f"<@{payload.user_id}> Could not find the job URL in that post.")
             return
 
-        await channel.send(
-            f"<@{payload.user_id}> On it! Generating tailored resume and cover letter for:\n"
-            f"> **{role_name}**\n\nGive me 30-60 seconds..."
-        )
-        logging.info(f"Tailoring triggered for: {job_url} (custom_prompt: {custom_prompt[:100]})")
-
-        # Build command args
-        tailor_cmd = [VENV_PYTHON, os.path.join(SCRIPT_DIR, "tailor.py"), job_url, str(payload.channel_id)]
-        if custom_prompt:
-            tailor_cmd.extend(["--prompt", custom_prompt])
-
-        loop = asyncio.get_event_loop()
+        # Send prepare-app request to RAS via inbox
         try:
-            result = await loop.run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    tailor_cmd,
-                    capture_output=True, text=True, timeout=180
-                )
+            from datetime import datetime, timezone, timedelta
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            expires = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
+            slug = company_name.lower().replace(" ", "-")[:20]
+
+            msg_content = f"""---
+from: job-agent (~/src/job-agent)
+to: RAS (~/Dropbox/RAS)
+date: {ts}
+expires: {expires}
+subject: Prepare application — {role_name} @ {company_name}
+---
+
+## Request (triggered by Discord ✅ reaction)
+
+Please run /prepare-app for this role: full /evaluate, tailored resume, cover letter.
+
+```
+{role_name} @ {company_name}
+{job_url}
+```
+
+Posting cache at `~/.cache/job-search/postings/` (check by job ID from URL).
+Write eval results to Supabase. Load env from `~/src/job-agent/.env.local`.
+"""
+            outbox_dir = os.path.join(SCRIPT_DIR, "..", ".claude", "inbox", "outbox")
+            os.makedirs(outbox_dir, exist_ok=True)
+            msg_file = os.path.join(outbox_dir, f"{ts}-prepare-{slug}.md")
+            with open(msg_file, "w") as f:
+                f.write(msg_content)
+
+            # Send via inbox tool
+            inbox_send = os.path.expanduser("~/.claude/tools/inbox-send.py")
+            result = subprocess.run(
+                ["uv", "run", inbox_send, msg_file, "ras"],
+                capture_output=True, text=True, timeout=15
             )
-            if result.returncode != 0:
-                logging.error(f"tailor.py stderr: {result.stderr}")
-                await channel.send(f"<@{payload.user_id}> Something went wrong. Check `/var/log/jobscout_tailor.log`")
-        except subprocess.TimeoutExpired:
-            await channel.send(f"<@{payload.user_id}> Tailoring timed out. Try again.")
+            if result.returncode == 0:
+                await channel.send(
+                    f"<@{payload.user_id}> 📋 Application prep requested for:\n"
+                    f"> **{role_name}** at **{company_name}**\n\n"
+                    f"RAS will prepare eval, tailored resume, and cover letter. "
+                    f"Check `~/Dropbox/RAS/{company_name}/` for results."
+                )
+                logging.info(f"Delegated prepare-app to RAS: {role_name} @ {company_name}")
+            else:
+                logging.error(f"inbox-send failed: {result.stderr}")
+                await channel.send(f"<@{payload.user_id}> Failed to send prep request. Check logs.")
         except Exception as e:
-            logging.error(f"Tailor error: {e}")
-            await channel.send(f"<@{payload.user_id}> Unexpected error: {e}")
+            logging.error(f"Prepare-app delegation error: {e}")
+            await channel.send(f"<@{payload.user_id}> Error: {e}")
 
     # ── Mark applied ───────────────────────────────────────────────────────
     elif emoji == "📨":
