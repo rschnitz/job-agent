@@ -31,9 +31,34 @@ const STATUS_ORDER: Record<JobStatus, number> = {
   rejected: 5,
 };
 
+function computePriority(job: Job): number {
+  const fit = job.fit_score ?? 0;
+  const hasEval = job.fit_explanation ? 1 : 0;
+  const salNorm = (job.salary_max ?? 0) / 20000;
+  const rel = (job.relevance_score ?? 0) / 10;
+  const appl = job.applicant_count ?? 50;
+  const applBonus = Math.max(0, (50 - appl) / 10);
+  return fit * 10 + hasEval * 5 + salNorm + rel + applBonus;
+}
+
 const ALL_STATUSES: JobStatus[] = ["new", "saved", "applied", "interviewing", "offer", "rejected"];
 
 const columns: ColumnDef<Job>[] = [
+  {
+    id: "priority",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Pri <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    accessorFn: (row) => computePriority(row),
+    cell: ({ row }) => {
+      const p = computePriority(row.original);
+      const color = p >= 95 ? "text-emerald-600 font-semibold" : p >= 85 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-sm tabular-nums ${color}`}>{p.toFixed(0)}</span>;
+    },
+    sortingFn: "basic",
+  },
   {
     accessorKey: "company",
     header: ({ column }) => (
@@ -170,7 +195,7 @@ const columns: ColumnDef<Job>[] = [
 export default function JobsTablePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "priority", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false });
   const [globalFilter, setGlobalFilter] = useState("");
