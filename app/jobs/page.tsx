@@ -135,26 +135,44 @@ const columns: ColumnDef<Job>[] = [
     sortingFn: (a, b) => STATUS_ORDER[a.original.status] - STATUS_ORDER[b.original.status],
   },
   {
-    id: "scores",
+    accessorKey: "ras_fit",
     header: ({ column }) => (
       <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
-        Fit/Suit <ArrowUpDown className="h-3 w-3" />
+        Fit <ArrowUpDown className="h-3 w-3" />
       </button>
     ),
-    accessorFn: (row) => row.ras_fit ?? row.haiku_score ?? 0,
     cell: ({ row }) => {
-      const j = row.original;
-      const fit = j.ras_fit;
-      const suit = j.ras_suitability;
-      const haiku = j.haiku_score;
-      if (fit != null) {
-        const color = fit >= 8 ? "text-emerald-600 font-semibold" : fit >= 7 ? "text-foreground" : "text-muted-foreground";
-        return <span className={`text-xs tabular-nums ${color}`}>{fit}/8{suit != null ? ` · ${suit}` : ""}</span>;
-      }
-      if (haiku != null) {
-        return <span className="text-xs tabular-nums text-muted-foreground italic">H{haiku}</span>;
-      }
-      return <span className="text-xs text-muted-foreground">—</span>;
+      const fit = row.original.ras_fit;
+      if (fit == null) return <span className="text-xs text-muted-foreground">—</span>;
+      const color = fit >= 8 ? "text-emerald-600 font-semibold" : fit >= 7 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-sm tabular-nums ${color}`}>{fit}</span>;
+    },
+  },
+  {
+    accessorKey: "ras_suitability",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Suit <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const suit = row.original.ras_suitability;
+      if (suit == null) return <span className="text-xs text-muted-foreground">—</span>;
+      const color = suit >= 85 ? "text-emerald-600 font-semibold" : suit >= 70 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-sm tabular-nums ${color}`}>{suit}</span>;
+    },
+  },
+  {
+    accessorKey: "haiku_score",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Haiku <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const h = row.original.haiku_score;
+      if (h == null) return <span className="text-xs text-muted-foreground">—</span>;
+      return <span className="text-sm tabular-nums text-muted-foreground">{h}</span>;
     },
   },
   {
@@ -240,7 +258,7 @@ export default function JobsTablePage() {
   const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([{ id: "priority", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<JobStatus>>(new Set(["new", "saved", "applied", "interviewing", "offer"]));
 
