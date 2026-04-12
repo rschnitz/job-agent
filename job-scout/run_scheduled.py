@@ -102,7 +102,7 @@ def request_ras_evaluation():
 
     # Find high-scoring jobs without RAS evaluation
     req = urllib.request.Request(
-        f"{supabase_url}/rest/v1/jobs?fit_explanation=is.null&status=neq.rejected&select=id,url,title,company,fit_score&order=fit_score.desc",
+        f"{supabase_url}/rest/v1/jobs?fit_explanation=is.null&status=neq.rejected&select=id,url,title,company,haiku_score&order=haiku_score.desc",
         headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
     )
     try:
@@ -110,7 +110,7 @@ def request_ras_evaluation():
     except Exception:
         return
 
-    needs_eval = [j for j in jobs if (j.get("fit_score") or 0) >= EVAL_THRESHOLD]
+    needs_eval = [j for j in jobs if (j.get("haiku_score") or 0) >= EVAL_THRESHOLD]
     if not needs_eval:
         return
 
@@ -120,7 +120,7 @@ def request_ras_evaluation():
     msg_file = os.path.join(OUTBOX_DIR, f"{ts}-auto-eval-request.md")
 
     job_lines = "\n".join(
-        f"  [{j.get('fit_score', '?')}] {j['title']} @ {j['company']}  {j.get('url', '')}"
+        f"  [{j.get('haiku_score', '?')}] {j['title']} @ {j['company']}  {j.get('url', '')}"
         for j in needs_eval
     )
 
@@ -188,12 +188,12 @@ def update_eval_queue_cache():
     try:
         hdrs = {"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
         req = urllib.request.Request(
-            f"{supabase_url}/rest/v1/jobs?fit_explanation=is.null&status=neq.rejected&fit_score=gte.7&select=fit_score",
+            f"{supabase_url}/rest/v1/jobs?fit_explanation=is.null&status=neq.rejected&haiku_score=gte.7&select=haiku_score",
             headers=hdrs
         )
         awaiting = len(json.loads(urllib.request.urlopen(req).read()))
         req2 = urllib.request.Request(
-            f"{supabase_url}/rest/v1/jobs?fit_explanation=not.is.null&status=neq.rejected&select=fit_score",
+            f"{supabase_url}/rest/v1/jobs?fit_explanation=not.is.null&status=neq.rejected&select=ras_fit",
             headers=hdrs
         )
         evaluated = len(json.loads(urllib.request.urlopen(req2).read()))

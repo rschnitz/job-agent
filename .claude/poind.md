@@ -1,32 +1,29 @@
-*POIND generated: 2026-03-31T00:15:00-07:00*
+# POIND: job-agent
+*Generated: 2026-04-04T08:00:00-07:00*
 
 ## Active threads
 
-**Scoring architecture — designed, blocked on RAS integration.** We agreed on a two-table schema: `jobs` (core facts: relevance + fit scores, salary min/max/bonus/equity, location, remote_days, posted_at, applicant_count) and `job_evaluations` (bespoke derived scores: effective comp, commute, recency, overall priority). The core columns are in Supabase. The next step is extracting `evaluate_job.py` from RAS's `/evaluate` and `/score-fit` commands — this replaces Claude Haiku's too-generous scoring with RAS's calibrated rubric. A message has been sent to RAS's inbox but no response yet. The blocker is that I can't invoke RAS commands, only read its files.
+**Scraper is operational and automated.** Running every 15 min (daytime) via launchctl. Radius search from Orinda, urgency-tiered Discord alerts, posting cache, auto-evaluation requests to RAS. NaN ingest bug fixed and 39 lost jobs recovered. Overlap analysis logging in place but search term optimization deferred — data still accumulating.
 
-**Search optimization — instrumented, awaiting data.** Scraper now logs query overlap + position + scores to CSV. We bumped to 100 results per query to test whether the long tail (positions 51-100) has value. Need 2-3 more runs to determine the minimum viable search set. Current hypothesis: "Engineering Manager", "Head of Engineering", "Principal Engineer", and "EM remote" might be sufficient — the specialized terms produced zero exclusive high-score jobs in one analyzed run.
+**RAS scoring integration — in progress.** RAS has scored all 42 Haiku 8+ jobs from the initial batch plus individual priority requests (Bugcrowd, Zillow, Checkr, Chainguard, Help Scout, Mechanical Orchard, Banyan, Arcade.dev). 52 jobs sent for full /evaluate in latest batch. Shared lib (~/src/job-search-lib/) extraction agreed but not yet started by RAS. Auto-eval requests sent after each scraper run.
 
-**Cross-project coordination — protocol established.** Inbox convention in `~/CLAUDE.md`: markdown files in `.claude/inbox/`, check every 3+ minutes during active work. Message sent to RAS requesting scoring infrastructure cooperation. No response yet. Bead `ja-p0l` to evaluate `/loop` or `/schedule` for periodic polling.
+**Resume work — Bugcrowd 1-page version complete.** RaySchnitzler2c.tex: v3 layout, Open Sans 11pt, education inline, all metrics bolded. Ready for submission. Cover letter also prepared by RAS.
 
-**Job detail page — may still be broken.** Diagnosed as Node upgrade issue requiring dev server restart. User restarted but hasn't confirmed it works. The `.maybeSingle()` fix should resolve the hang.
+**Application pipeline active.** Applied: OpenAI (Fit 9), Arcade.dev (Fit 8), Banyan (Fit 8), Anthropic FinServ (Fit 7), Retool (unscored), Stripe (unscored). Bugcrowd (Fit 8) ready to apply. ~25 Fit 7 roles evaluated and ready.
 
 ## Open between us
 
-- **Does the job detail page work now?** You restarted the dev server but we haven't confirmed the fix landed.
-- **RAS inbox response.** Need you to open a Claude session in `~/Dropbox/RAS` and point it at the message in `.claude/inbox/`. That session can evaluate whether `evaluate_job.py` extraction is feasible and respond.
-- **Uncommitted work.** Schema migration (new core columns), scraper changes (radius search, exclusions, overlap logging), POIND skill update, cross-project inbox setup, CLAUDE.md updates — all uncommitted since last commit.
+- **122 jobs still need RAS evaluation** (Haiku 7+, no fit_explanation). Batch of 52 eights sent. Sevens not yet requested.
+- **Retool and Stripe** — applied but no RAS evaluation or salary data. Should request.
+- **Shared lib not started** — RAS confirmed ownership but no `lib-ready-scoring` message yet. Scoring still uses Haiku.
+- **4 unpushed commits** on master. Should push to origin?
 
 ## Settled
 
-- Relevance (do I want this?) and fit (am I qualified?) are separate scores, both in core `jobs` table
-- Comp stored as facts (salary_min, salary_max, bonus_or_commission_est, equity_est); scoring is derived in `job_evaluations`
-- Urgency model: jobs passing relevance + fit get tiered alerts (URGENT/HIGH/MEDIUM/LOW) based on freshness x applicant count (`ja-7fi`)
-- Commute model: weekly effective one-way minutes, remote day penalties (1d=10m, 2d=35m, 3d=60m, 4d=105m, 5d=150m), shuttle = usable time not speed (`ja-sek`)
-- Insurance is NOT an excluded industry
-- Job aggregators excluded only when the company name IS the aggregator, not when they list real companies
-- Cross-project communication via `.claude/inbox/` markdown files, documented in `~/CLAUDE.md`
-- POIND writes to `.claude/poind.md` as well as chat
-
-## Next pull
-
-Commit the current changes, then open a RAS session to get the scoring integration unblocked.
+- relevance_score is 0-100 (matching RAS Suitability), fit_score is 1-8 (RAS scale)
+- Urgency tiers: URGENT 8+/<1h/<=25appl, HIGH 6+/<4h/<25, MEDIUM 5+/<24h/<50, LOW rest
+- Requests to RAS always use full /evaluate (not /score-fit)
+- Posting HTML cache at ~/.cache/job-search/postings/ shared with RAS
+- Dismiss = reject with reason, not delete
+- Scraper schedule: 15min 7am-7pm, hourly evenings, overnight at 12:30/2/4/6am
+- Resume 1-page template: v3 layout, education inline in skills section

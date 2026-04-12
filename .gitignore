@@ -19,3 +19,4 @@ job-scout/output/
 job-scout/#*#
 job-scout/.#*
 .claude/inbox/
+job-scout/*.tsv

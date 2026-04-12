@@ -8,9 +8,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, company, url, description, source, fit_score,
+  const { title, company, url, description, source, haiku_score,
           salary_min, salary_max, location, posted_at, applicant_count,
-          relevance_score, relevance_explanation, fit_explanation } = body;
+          relevance_explanation } = body;
 
   if (!title || !company) {
     return NextResponse.json({ error: "title and company are required" }, { status: 400 });
@@ -36,13 +36,11 @@ export async function POST(req: NextRequest) {
     .from("jobs")
     .insert({
       title, company, url: url ?? null, description: description ?? null,
-      source: source ?? null, status: "new", fit_score: fit_score ?? null,
+      source: source ?? null, status: "new", haiku_score: haiku_score ?? null,
       salary_min: salary_min ?? null, salary_max: salary_max ?? null,
       location: location ?? null, posted_at: posted_at ?? null,
       applicant_count: applicant_count ?? null,
-      relevance_score: relevance_score ?? null,
       relevance_explanation: relevance_explanation ?? null,
-      fit_explanation: fit_explanation ?? null,
     })
     .select()
     .single();
