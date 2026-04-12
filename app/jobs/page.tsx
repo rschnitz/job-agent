@@ -31,14 +31,48 @@ const STATUS_ORDER: Record<JobStatus, number> = {
   rejected: 5,
 };
 
+const AGENCY_COMPANIES = new Set([
+  "jobgether", "remotehunter", "harnham", "lensa", "jobs via dice",
+  "futuretech recruitment", "harrison clarke", "day one partners", "andiamo",
+  "empathy talent", "coffeespace", "saragossa", "jack & jill", "techtree",
+  "elios talent", "tessera data", "code red partners", "ladders", "nextdeavor",
+  "vocator", "gruve",
+]);
+
 function computePriority(job: Job): number {
-  const fit = job.fit_score ?? 0;
-  const hasEval = job.fit_explanation ? 1 : 0;
-  const salNorm = (job.salary_max ?? 0) / 20000;
-  const rel = (job.relevance_score ?? 0) / 10;
-  const appl = job.applicant_count ?? 50;
-  const applBonus = Math.max(0, (50 - appl) / 10);
-  return fit * 10 + hasEval * 5 + salNorm + rel + applBonus;
+  const rel = job.relevance_score ?? 0;
+  const fit = job.fit_score ?? null;
+
+  // Merit (0-100)
+  const merit = fit != null
+    ? rel * 0.4 + fit * 7.5
+    : rel * 0.7 + 15;
+
+  // CompAdj (-10 to +15)
+  let compAdj = 0;
+  if (job.salary_min && job.salary_max) {
+    const range = job.salary_max - job.salary_min;
+    const lo = job.salary_min + 0.1 * range;
+    const hi = job.salary_max - 0.1 * range;
+    const avg = (200000 + job.salary_min + job.salary_max) / 3;
+    const salEst = Math.min(hi, Math.max(lo, avg));
+    if (salEst < 180000) compAdj = Math.max(-10, -3 + (salEst - 180000) / 40000 * 7);
+    else if (salEst < 200000) compAdj = -3 * (200000 - salEst) / 20000;
+    else if (salEst < 220000) compAdj = 3 * (salEst - 200000) / 20000;
+    else compAdj = 3 + 12 * (1 - Math.exp(-(salEst - 220000) / 100000));
+  }
+
+  // Recency (dual-exponential, 0.50-1.30)
+  let recency = 0.50; // floor when posted_at unknown
+  if (job.posted_at) {
+    const age = (Date.now() - new Date(job.posted_at).getTime()) / (1000 * 60 * 60 * 24);
+    recency = 0.50 + 0.45 * Math.exp(-age / 14) + 0.35 * Math.exp(-age / 1.5);
+  }
+
+  // Agency discount
+  const agency = AGENCY_COMPANIES.has(job.company.toLowerCase()) ? 0.75 : 1.0;
+
+  return (merit + compAdj) * recency * agency;
 }
 
 const ALL_STATUSES: JobStatus[] = ["new", "saved", "applied", "interviewing", "offer", "rejected"];
