@@ -40,19 +40,19 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %I:%M:%S %p"
 )
 
-# Search terms -- kept focused on EM/Director roles
+# Search terms — consolidated with boolean OR to reduce LinkedIn queries
+# Each string is one query. OR combines equivalent title searches.
 SEARCH_TERMS = [
-    "Engineering Manager",
-    "Senior Engineering Manager",
-    "Director of Engineering",
-    "Head of Engineering",
-    "VP Engineering",
-    "Engineering Manager fintech",
-    "Engineering Manager platform",
-    # "Principal Engineer" covers "Principal Software Engineer" on LinkedIn
-    "Principal Engineer",
-    # "Staff Engineer" covers "Staff Software Engineer" and "Senior Staff" variants
-    "Staff Engineer",
+    '"Engineering Manager" OR "Senior Engineering Manager"',
+    '"Director of Engineering" OR "Head of Engineering" OR "VP Engineering"',
+    '"Principal Engineer" OR "Staff Engineer"',
+]
+
+# Domain-targeted search — runs as additional query, not replacement
+# Wider title range but filtered by domain keywords
+DOMAIN_SEARCH_TERMS = [
+    '"Engineering Manager" AND ("identity" OR "authentication" OR "security")',
+    '"Engineering Manager" AND ("fintech" OR "platform" OR "payments")',
 ]
 
 # No intern or comms searches for this profile
@@ -978,8 +978,11 @@ def run():
             logging.error(f"Error scraping '{search_term}': {e}")
         time.sleep(2)
 
-    # Remote searches
-    for search_term in ["Engineering Manager remote", "Senior Engineering Manager remote", "Director of Engineering remote"]:
+    # Remote searches — consolidated with OR
+    REMOTE_SEARCH_TERMS = [
+        '"Engineering Manager" OR "Senior Engineering Manager" OR "Director of Engineering"',
+    ]
+    for search_term in REMOTE_SEARCH_TERMS:
         try:
             jobs_df = scrape_jobs(
                 site_name=["linkedin"],
@@ -998,27 +1001,22 @@ def run():
             logging.error(f"Error scraping remote '{search_term}': {e}")
         time.sleep(2)
 
-    # Daily deep search: domain-specific terms with wider window
-    # Catches niche roles that rank low in generic searches
-    DEEP_SEARCH_TERMS = [
-        "Engineering Manager identity",
-        "Engineering Manager authentication",
-        "Engineering Manager security platform",
-    ]
-    DEEP_SEARCH_INTERVAL_HOURS = 12
+    # Domain-targeted searches — additional, not replacement
+    # Catches niche roles in target domains with wider title range
+    DOMAIN_SEARCH_INTERVAL_HOURS = 12
     deep_search_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_deep_search")
     run_deep = True
     try:
         with open(deep_search_file) as f:
             last_deep = datetime.fromisoformat(f.read().strip())
-        if (datetime.now(timezone.utc) - last_deep).total_seconds() < DEEP_SEARCH_INTERVAL_HOURS * 3600:
+        if (datetime.now(timezone.utc) - last_deep).total_seconds() < DOMAIN_SEARCH_INTERVAL_HOURS * 3600:
             run_deep = False
     except (FileNotFoundError, ValueError):
         pass
 
     if run_deep:
-        logging.info("Running deep domain-specific search (72h window)")
-        for search_term in DEEP_SEARCH_TERMS:
+        logging.info("Running domain-targeted search (72h window)")
+        for search_term in DOMAIN_SEARCH_TERMS:
             try:
                 jobs_df = scrape_jobs(
                     site_name=["linkedin"],
@@ -1030,11 +1028,11 @@ def run():
                     job_type="fulltime",
                 )
                 if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' (deep, 72h): {len(jobs_df)} results")
-                    log_query_results(search_term, "Orinda, CA (deep)", jobs_df, run_ts)
+                    logging.info(f"'{search_term}' (domain, 72h): {len(jobs_df)} results")
+                    log_query_results(search_term, "Orinda, CA (domain)", jobs_df, run_ts)
                     total_alerted += process_jobs(jobs_df, conn)
             except Exception as e:
-                logging.error(f"Error in deep search '{search_term}': {e}")
+                logging.error(f"Error in domain search '{search_term}': {e}")
             time.sleep(2)
         with open(deep_search_file, "w") as f:
             f.write(datetime.now(timezone.utc).isoformat())
