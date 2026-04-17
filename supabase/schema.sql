@@ -12,7 +12,7 @@ create table if not exists jobs (
   haiku_score integer,
   ras_fit integer,
   fit_explanation text,
-  ras_suitability integer,
+  ras_interest integer,
   relevance_explanation text,
   salary_min integer,
   salary_max integer,

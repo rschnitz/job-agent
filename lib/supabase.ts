@@ -32,7 +32,7 @@ export type Job = {
   haiku_score: number | null;
   ras_fit: number | null;
   fit_explanation: string | null;
-  ras_suitability: number | null;
+  ras_interest: number | null;
   relevance_explanation: string | null;
   salary_min: number | null;
   salary_max: number | null;

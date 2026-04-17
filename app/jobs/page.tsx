@@ -40,7 +40,7 @@ const AGENCY_COMPANIES = new Set([
 ]);
 
 function computePriority(job: Job): number {
-  const suit = job.ras_suitability ?? (job.haiku_score ? job.haiku_score * 10 : 0);
+  const suit = job.ras_interest ?? (job.haiku_score ? job.haiku_score * 10 : 0);
   const fit = job.ras_fit ?? null;
 
   // Merit (0-100)
@@ -149,14 +149,14 @@ const columns: ColumnDef<Job>[] = [
     },
   },
   {
-    accessorKey: "ras_suitability",
+    accessorKey: "ras_interest",
     header: ({ column }) => (
       <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
-        Suit <ArrowUpDown className="h-3 w-3" />
+        Interest <ArrowUpDown className="h-3 w-3" />
       </button>
     ),
     cell: ({ row }) => {
-      const suit = row.original.ras_suitability;
+      const suit = row.original.ras_interest;
       if (suit == null) return <span className="text-xs text-muted-foreground">—</span>;
       const color = suit >= 85 ? "text-emerald-600 font-semibold" : suit >= 70 ? "text-foreground" : "text-muted-foreground";
       return <span className={`text-sm tabular-nums ${color}`}>{suit}</span>;
