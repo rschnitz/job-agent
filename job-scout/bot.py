@@ -270,12 +270,16 @@ async def on_raw_reaction_add(payload):
             await channel.send(f"<@{payload.user_id}> Could not find the job URL in that post.")
             return
 
-        # Send prepare-app request to RAS via inbox
+        # Send prepare-app request to RAS via inbox (idempotent)
         try:
             from datetime import datetime, timezone, timedelta
+            import glob as _glob
+            import re as _re
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             expires = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
-            slug = company_name.lower().replace(" ", "-")[:20]
+            company_slug = _re.sub(r"[^a-z0-9]+", "-", company_name.lower()).strip("-")[:20]
+            role_slug = _re.sub(r"[^a-z0-9]+", "-", role_name.lower()).strip("-")[:20]
+            slug = f"{company_slug}-{role_slug}"
 
             msg_content = f"""---
 from: job-agent (~/src/job-agent)
@@ -289,6 +293,10 @@ subject: Prepare application — {role_name} @ {company_name}
 
 Please run /prepare-app for this role: full /evaluate, tailored resume, cover letter.
 
+Idempotency: reuse existing company folder if present. Name evals and cover letters
+with role+date suffix to avoid collisions (e.g. `eval-{role_slug}-{ts}.md`,
+`{role_slug}-{ts}.pdf`). Skip steps already complete for this exact role+URL.
+
 ```
 {role_name} @ {company_name}
 {job_url}
@@ -297,6 +305,19 @@ Please run /prepare-app for this role: full /evaluate, tailored resume, cover le
 Posting cache at `~/.cache/job-search/postings/` (check by job ID from URL).
 Write eval results to Supabase. Load env from `~/src/job-agent/.env.local`.
 """
+            # Check if already queued in RAS inbox (idempotent: skip, not error)
+            ras_inbox = os.path.expanduser(
+                "~/Library/CloudStorage/Dropbox/RAS/.claude/inbox"
+            )
+            existing = _glob.glob(os.path.join(ras_inbox, f"*prepare-{company_slug}*"))
+            if existing:
+                logging.info(f"prepare-app already queued for {company_name}: {existing[0]}")
+                await channel.send(
+                    f"<@{payload.user_id}> 📋 Already queued for **{company_name}**.\n"
+                    f"RAS has a pending request — check `~/Dropbox/RAS/{company_name}/` for results."
+                )
+                return
+
             outbox_dir = os.path.join(SCRIPT_DIR, "..", ".claude", "inbox", "outbox")
             os.makedirs(outbox_dir, exist_ok=True)
             msg_file = os.path.join(outbox_dir, f"{ts}-prepare-{slug}.md")
