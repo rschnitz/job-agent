@@ -23,6 +23,7 @@ export type JobStatus =
 
 export type Job = {
   id: string;
+  ras_id: string | null;
   title: string;
   company: string;
   url: string | null;

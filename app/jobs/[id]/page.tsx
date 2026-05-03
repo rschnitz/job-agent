@@ -180,7 +180,7 @@ export default function JobDetail() {
                   <div>
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-lg leading-tight">{job.title}</CardTitle>
-                      <span className="text-xs font-mono text-muted-foreground shrink-0">{job.id.slice(0, 6).toUpperCase()}</span>
+                      {job.ras_id && <span className="text-xs font-mono text-muted-foreground shrink-0">{job.ras_id}</span>}
                     </div>
                     <p className="text-muted-foreground mt-0.5 text-sm">{job.company}</p>
                   </div>

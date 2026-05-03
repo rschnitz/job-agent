@@ -77,17 +77,12 @@ function computePriority(job: Job): number {
 
 const ALL_STATUSES: JobStatus[] = ["new", "saved", "applied", "interviewing", "offer", "rejected"];
 
-function jid(id: string): string {
-  return id.slice(0, 6).toUpperCase();
-}
-
 const columns: ColumnDef<Job>[] = [
   {
-    id: "jid",
+    accessorKey: "ras_id",
     header: "J-ID",
-    accessorFn: (row) => row.id.slice(0, 6).toUpperCase(),
     cell: ({ row }) => (
-      <span className="text-xs font-mono text-muted-foreground">{jid(row.original.id)}</span>
+      <span className="text-xs font-mono text-muted-foreground">{row.original.ras_id ?? "—"}</span>
     ),
     enableSorting: false,
   },
