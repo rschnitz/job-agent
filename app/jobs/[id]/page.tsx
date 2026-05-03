@@ -178,7 +178,10 @@ export default function JobDetail() {
                 <div className="flex items-start gap-3">
                   <CompanyAvatar company={job.company} size="md" className="mt-0.5" />
                   <div>
-                    <CardTitle className="text-lg leading-tight">{job.title}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg leading-tight">{job.title}</CardTitle>
+                      <span className="text-xs font-mono text-muted-foreground shrink-0">{job.id.slice(0, 6).toUpperCase()}</span>
+                    </div>
                     <p className="text-muted-foreground mt-0.5 text-sm">{job.company}</p>
                   </div>
                 </div>

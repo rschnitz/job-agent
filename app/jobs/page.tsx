@@ -77,7 +77,20 @@ function computePriority(job: Job): number {
 
 const ALL_STATUSES: JobStatus[] = ["new", "saved", "applied", "interviewing", "offer", "rejected"];
 
+function jid(id: string): string {
+  return id.slice(0, 6).toUpperCase();
+}
+
 const columns: ColumnDef<Job>[] = [
+  {
+    id: "jid",
+    header: "J-ID",
+    accessorFn: (row) => row.id.slice(0, 6).toUpperCase(),
+    cell: ({ row }) => (
+      <span className="text-xs font-mono text-muted-foreground">{jid(row.original.id)}</span>
+    ),
+    enableSorting: false,
+  },
   {
     id: "priority",
     header: ({ column }) => (
@@ -404,8 +417,8 @@ export default function JobsTablePage() {
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i}>
-                  {columns.map((_, j) => (
-                    <TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse w-24" /></TableCell>
+                  {table.getVisibleLeafColumns().map((col) => (
+                    <TableCell key={col.id}><div className="h-4 bg-muted rounded animate-pulse w-24" /></TableCell>
                   ))}
                 </TableRow>
               ))
