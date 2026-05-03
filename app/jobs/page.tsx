@@ -276,6 +276,7 @@ const columns: ColumnDef<Job>[] = [
 ];
 
 export default function JobsTablePage() {
+  const [mounted, setMounted] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([{ id: "priority", desc: true }]);
@@ -283,6 +284,8 @@ export default function JobsTablePage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, lib_score: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<JobStatus>>(new Set(["new", "saved", "applied", "interviewing", "offer"]));
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     supabase.from("jobs").select("*").order("created_at", { ascending: false }).then(({ data }) => {
@@ -319,6 +322,8 @@ export default function JobsTablePage() {
   };
 
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+
+  if (!mounted) return null;
 
   return (
     <div>
