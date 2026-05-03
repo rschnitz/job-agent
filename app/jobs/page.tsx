@@ -40,7 +40,7 @@ const AGENCY_COMPANIES = new Set([
 ]);
 
 function computePriority(job: Job): number {
-  const suit = job.ras_interest ?? (job.haiku_score ? job.haiku_score * 10 : 0);
+  const suit = job.ras_interest ?? job.lib_score ?? (job.haiku_score != null ? job.haiku_score * 10 : 0);
   const fit = job.ras_fit ?? null;
 
   // Merit (0-100)
@@ -163,6 +163,20 @@ const columns: ColumnDef<Job>[] = [
     },
   },
   {
+    accessorKey: "lib_score",
+    header: ({ column }) => (
+      <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
+        Lib <ArrowUpDown className="h-3 w-3" />
+      </button>
+    ),
+    cell: ({ row }) => {
+      const s = row.original.lib_score;
+      if (s == null) return <span className="text-xs text-muted-foreground">—</span>;
+      const color = s >= 75 ? "text-emerald-600 font-semibold" : s >= 60 ? "text-foreground" : "text-muted-foreground";
+      return <span className={`text-sm tabular-nums ${color}`}>{s}</span>;
+    },
+  },
+  {
     accessorKey: "haiku_score",
     header: ({ column }) => (
       <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
@@ -258,7 +272,7 @@ export default function JobsTablePage() {
   const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([{ id: "priority", desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, haiku_score: false });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, lib_score: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<JobStatus>>(new Set(["new", "saved", "applied", "interviewing", "offer"]));
 

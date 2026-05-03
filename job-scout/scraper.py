@@ -87,7 +87,7 @@ EXCLUDE_INDUSTRIES = [
 # Job aggregator sites — exclude only when the company name IS the aggregator
 # (not when the aggregator lists a real company's role)
 JOB_AGGREGATORS = [
-    "lensa", "ziprecruiter", "remotehunter", "jobs via dice",
+    "lensa", "ziprecruiter", "remotehunter", "jobs via dice", "jobgether",
 ]
 
 REPOST_SIGNALS = [
@@ -699,6 +699,7 @@ def post_to_job_agent(job, analysis):
             "description": str(job.get("description") or ""),
             "source": str(job.get("site") or "linkedin"),
             "haiku_score": analysis.get("fit_score"),
+            "lib_score": int(job.get("_lib_score")) if job.get("_lib_score") is not None else None,
             "relevance_explanation": analysis.get("reason"),
             "salary_min": sal_min,
             "salary_max": sal_max,

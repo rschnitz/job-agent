@@ -30,6 +30,7 @@ export type Job = {
   source: string | null;
   status: JobStatus;
   haiku_score: number | null;
+  lib_score: number | null;
   ras_fit: number | null;
   fit_explanation: string | null;
   ras_interest: number | null;
