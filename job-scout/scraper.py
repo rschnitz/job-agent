@@ -12,6 +12,7 @@ import re
 import time
 import requests
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from jobspy import scrape_jobs
@@ -178,7 +179,7 @@ def get_seen_score(conn, job_url):
 def mark_seen(conn, job_url, title="", company="", outcome="", score=None):
     conn.execute(
         "INSERT OR IGNORE INTO seen_jobs (job_url, title, company, date_found, outcome, score) VALUES (?, ?, ?, ?, ?, ?)",
-        (job_url, str(title), str(company), datetime.now(timezone.utc).isoformat(), outcome, score)
+        (job_url, str(title), str(company), datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M:%S"), outcome, score)
     )
     conn.commit()
 
@@ -980,7 +981,7 @@ def run():
     logging.info("=== Scraper run started ===")
     conn = init_db()
     total_alerted = 0
-    run_ts = datetime.now(timezone.utc).isoformat()
+    run_ts = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %H:%M:%S")
 
     # Adaptive hours_old: 1.5 × interval since last run, floored at 30 min
     search_hours, interval_h = compute_hours_old()
@@ -1000,7 +1001,7 @@ def run():
                 location="Orinda, CA",
                 distance=40,
                 results_wanted=100,
-                hours_old=search_hours,
+                hours_old=max(1, round(search_hours)),
                 job_type="fulltime",
             )
             if jobs_df is not None and not jobs_df.empty:
@@ -1026,7 +1027,7 @@ def run():
                 search_term=search_term,
                 location="United States",
                 results_wanted=100,
-                hours_old=search_hours,
+                hours_old=max(1, round(search_hours)),
                 job_type="fulltime",
                 is_remote=True,
             )
@@ -1172,7 +1173,6 @@ def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, al
                 "claude_calls", "input_tokens", "output_tokens", "cost_usd",
                 "quick_filtered", "lib_filtered", "freshness_filtered", "claude_filtered",
             ])
-        from zoneinfo import ZoneInfo
         writer.writerow([
             run_ts,
             datetime.now(ZoneInfo("America/Los_Angeles")).hour,
