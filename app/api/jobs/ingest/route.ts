@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     .from("jobs")
     .insert({
       title, company, url: url ?? null, description: description ?? null,
-      source: source ?? null, status: "new", haiku_score: haiku_score ?? null, lib_score: lib_score ?? null,
+      source: source ?? null, status: "new", stage: "new", outcome: "active",
+      haiku_score: haiku_score ?? null, lib_score: lib_score ?? null,
       salary_min: salary_min ?? null, salary_max: salary_max ?? null,
       location: location ?? null, posted_at: posted_at ?? null,
       applicant_count: applicant_count ?? null,

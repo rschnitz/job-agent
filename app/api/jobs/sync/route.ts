@@ -12,6 +12,21 @@ const STATUS_MAP: Record<string, string> = {
   withdrawn:    "rejected",
 };
 
+// Stage watermark for progress events (never downgrade)
+const STAGE_MAP: Record<string, string> = {
+  applied:      "applied",
+  phone_screen: "screened",
+  interview:    "interviewed",
+  interviewing: "interviewed",
+  offer:        "offered",
+};
+
+// Outcome for terminal events
+const OUTCOME_MAP: Record<string, string> = {
+  rejected:  "rejected",
+  withdrawn: "withdrawn",
+};
+
 export async function POST(req: NextRequest) {
   const apiKey = req.headers.get("x-api-key");
   if (apiKey !== process.env.INGEST_API_KEY) {
@@ -39,15 +54,25 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (existing) {
-    await db.from("jobs").update({ status: webStatus }).eq("id", existing.id);
+    const patch: Record<string, string> = { status: webStatus };
+    const newStage = STAGE_MAP[status.toLowerCase()];
+    const newOutcome = OUTCOME_MAP[status.toLowerCase()];
+    if (newStage) patch.stage = newStage;
+    if (newOutcome) patch.outcome = newOutcome;
+    await db.from("jobs").update(patch).eq("id", existing.id);
     return NextResponse.json({ id: existing.id, action: "updated", status: webStatus });
   }
 
   // Job not in web UI yet (manually applied outside scraper) — create it
   if (title && company) {
+    const newStage = STAGE_MAP[status.toLowerCase()] ?? "new";
+    const newOutcome = OUTCOME_MAP[status.toLowerCase()] ?? "active";
     const { data, error } = await db
       .from("jobs")
-      .insert({ title, company, url, status: webStatus, source: "discord", description: description ?? null })
+      .insert({
+        title, company, url, status: webStatus, stage: newStage, outcome: newOutcome,
+        source: "discord", description: description ?? null,
+      })
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

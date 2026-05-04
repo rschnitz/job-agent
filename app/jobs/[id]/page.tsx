@@ -73,9 +73,24 @@ export default function JobDetail() {
     }
   }
 
+  // Stage watermark for manual status changes
+  const STATUS_TO_STAGE: Record<string, string> = {
+    applied:      "applied",
+    interviewing: "interviewed",
+    offer:        "offered",
+  };
+  const STATUS_TO_OUTCOME: Record<string, string> = {
+    rejected: "rejected",
+  };
+
   async function updateStatus(status: JobStatus) {
-    await supabase.from("jobs").update({ status }).eq("id", id);
-    setJob((j) => j ? { ...j, status } : j);
+    const patch: Record<string, string> = { status };
+    const newStage = STATUS_TO_STAGE[status];
+    const newOutcome = STATUS_TO_OUTCOME[status];
+    if (newStage) patch.stage = newStage;
+    if (newOutcome) patch.outcome = newOutcome;
+    await supabase.from("jobs").update(patch).eq("id", id);
+    setJob((j) => j ? { ...j, status, ...(newStage ? { stage: newStage as any } : {}), ...(newOutcome ? { outcome: newOutcome as any } : {}) } : j);
   }
 
   async function saveNotes() {
@@ -87,9 +102,10 @@ export default function JobDetail() {
     if (reason === null) return;
     await supabase.from("jobs").update({
       status: "rejected",
+      outcome: "rejected",
       rejection_reason: reason || undefined,
     }).eq("id", id);
-    setJob((j) => j ? { ...j, status: "rejected" as JobStatus, rejection_reason: reason } : j);
+    setJob((j) => j ? { ...j, status: "rejected" as JobStatus, outcome: "rejected" as any, rejection_reason: reason } : j);
   }
 
   async function sendMessage() {

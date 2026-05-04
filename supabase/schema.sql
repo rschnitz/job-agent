@@ -9,6 +9,10 @@ create table if not exists jobs (
   description text,
   source text,
   status text not null default 'new' check (status in ('new','saved','applied','interviewing','offer','rejected')),
+  -- Pipeline watermark: highest stage reached (never downgrades)
+  stage text default 'new' check (stage in ('new','applied','acked','screened','interviewed','offered')),
+  -- Disposition: current outcome state
+  outcome text default 'active' check (outcome in ('active','ghosted','rejected','withdrawn','closed','accepted','declined')),
   haiku_score integer,
   ras_fit integer,
   fit_explanation text,
@@ -63,6 +67,13 @@ create policy "profiles_update" on profiles for update using (true);
 create policy "conversations_read" on conversations for select using (true);
 create policy "conversations_insert" on conversations for insert with check (true);
 create policy "conversations_update" on conversations for update using (true);
+
+-- Migration: add stage + outcome columns (2026-05-02)
+-- Run these if upgrading an existing database:
+-- alter table jobs add column if not exists stage text default 'new' check (stage in ('new','applied','acked','screened','interviewed','offered'));
+-- alter table jobs add column if not exists outcome text default 'active' check (outcome in ('active','ghosted','rejected','withdrawn','closed','accepted','declined'));
+-- update jobs set stage = case status when 'applied' then 'applied' when 'interviewing' then 'interviewed' when 'offer' then 'offered' else 'new' end where stage is null or stage = 'new';
+-- update jobs set outcome = case status when 'rejected' then 'rejected' else 'active' end where outcome is null or outcome = 'active';
 
 -- Seed default profile (upsert so re-running schema is safe)
 insert into profiles (id, resume_text, skills, preferences) values (

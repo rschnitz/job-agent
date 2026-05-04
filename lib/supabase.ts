@@ -21,6 +21,23 @@ export type JobStatus =
   | "offer"
   | "rejected";
 
+export type Stage =
+  | "new"
+  | "applied"
+  | "acked"
+  | "screened"
+  | "interviewed"
+  | "offered";
+
+export type Outcome =
+  | "active"
+  | "ghosted"
+  | "rejected"
+  | "withdrawn"
+  | "closed"
+  | "accepted"
+  | "declined";
+
 export type Job = {
   id: string;
   ras_id: string | null;
@@ -30,6 +47,8 @@ export type Job = {
   description: string | null;
   source: string | null;
   status: JobStatus;
+  stage: Stage | null;
+  outcome: Outcome | null;
   haiku_score: number | null;
   lib_score: number | null;
   ras_fit: number | null;
