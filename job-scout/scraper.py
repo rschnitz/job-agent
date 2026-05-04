@@ -30,7 +30,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 INGEST_URL = os.getenv("INGEST_URL", "https://job-agent-henna.vercel.app/api/jobs/ingest")
 INGEST_API_KEY = os.getenv("INGEST_API_KEY")
 DB_PATH          = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jobs.db")
-LAST_RUN_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_run_ts")
+LAST_RUN_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_run")
 RUN_HISTORY_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "run_history.csv")
 
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "scraper.log")
@@ -1062,10 +1062,6 @@ def run():
         logging.warning(f"Applicant count update failed: {e}")
 
     conn.close()
-
-    # Persist last-run timestamp for next run's hours_old computation
-    with open(LAST_RUN_FILE, "w") as f:
-        f.write(datetime.now(timezone.utc).isoformat())
 
     logging.info(
         f"=== Scraper run complete: {total_alerted} alerted, "
