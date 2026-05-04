@@ -441,6 +441,10 @@ Respond with JSON only:
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}]
         )
+        global _claude_calls, _input_tokens, _output_tokens
+        _claude_calls  += 1
+        _input_tokens  += response.usage.input_tokens
+        _output_tokens += response.usage.output_tokens
         text = response.content[0].text.strip()
         if text.startswith("```"):
             text = text.split("```")[1]
@@ -726,8 +730,19 @@ def post_to_job_agent(job, analysis):
 # Track title+company combos seen this run to avoid duplicate Claude calls
 _seen_this_run = set()
 
-# Run-level late-discovery counter (jobs first seen with high applicant count)
-_late_discoveries = 0
+# Run-level counters — reset at end of each run
+_late_discoveries        = 0
+_claude_calls            = 0
+_input_tokens            = 0
+_output_tokens           = 0
+_quick_filtered_count    = 0
+_lib_filtered_count      = 0
+_freshness_filtered_count = 0
+_claude_filtered_count   = 0
+
+# Haiku 4.5 pricing (per million tokens)
+_HAIKU_INPUT_COST_PER_M  = 0.80
+_HAIKU_OUTPUT_COST_PER_M = 4.00
 
 
 def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
@@ -754,6 +769,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
 
         passed, reason = quick_filter(job_dict)
         if not passed:
+            global _quick_filtered_count
+            _quick_filtered_count += 1
             logging.info(f"Quick filtered: {job_dict.get('title')} @ {job_dict.get('company')} -- {reason}")
             log_outcome(job_url, "quick_filtered", reason=reason)
             mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="quick_filtered")
@@ -797,6 +814,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
             # Low lib scores skip the expensive fetch + Claude steps
             LIB_SCORE_THRESHOLD = 0  # TEMPORARY: disabled for parallel comparison (normally 30)
             if lib_score < LIB_SCORE_THRESHOLD:
+                global _lib_filtered_count
+                _lib_filtered_count += 1
                 logging.info(f"Lib filtered ({lib_score:.0f} < {LIB_SCORE_THRESHOLD}): {title_str} @ {company_str}")
                 log_outcome(job_url, "lib_filtered", score=int(lib_score), reason=jr.score_breakdown)
                 mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="lib_filtered", score=int(lib_score))
@@ -819,6 +838,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         # OR filter
         passes, age_hours, applicant_count = passes_or_filter(job_dict, is_repost=repost)
         if not passes:
+            global _freshness_filtered_count
+            _freshness_filtered_count += 1
             logging.info(f"OR filtered ({age_hours:.1f}h old, {applicant_count} applicants): {job_dict.get('title')} @ {job_dict.get('company')}")
             log_outcome(job_url, "freshness_filtered", reason=f"{age_hours:.1f}h old, {applicant_count} applicants")
             mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="freshness_filtered")
@@ -841,6 +862,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         fit_score = analysis.get("fit_score", 0)
         min_score = 4 if is_intern else (5 if is_remote else 5)
         if not analysis.get("relevant") or fit_score < min_score:
+            global _claude_filtered_count
+            _claude_filtered_count += 1
             logging.info(f"Claude filtered: {job_dict.get('title')} @ {job_dict.get('company')} -- {analysis.get('reason')}")
             log_outcome(job_url, "claude_filtered", score=fit_score, reason=analysis.get("reason", ""))
             mark_seen(conn, job_url, job_dict.get("title"), job_dict.get("company"), outcome="claude_filtered", score=fit_score)
@@ -1063,11 +1086,25 @@ def run():
 
     conn.close()
 
+    run_cost = (_input_tokens * _HAIKU_INPUT_COST_PER_M + _output_tokens * _HAIKU_OUTPUT_COST_PER_M) / 1_000_000
     logging.info(
         f"=== Scraper run complete: {total_alerted} alerted, "
         f"{total_results} total results, "
         f"{_late_discoveries} late discoveries, "
         f"hours_old={search_hours:.1f}h ==="
+    )
+    logging.info(
+        f"    Cost: {_claude_calls} Claude calls, "
+        f"{_input_tokens:,} in / {_output_tokens:,} out tokens, "
+        f"${run_cost:.4f}"
+    )
+    logging.info(
+        f"    Funnel: {total_results} scraped → "
+        f"{_quick_filtered_count} quick-filtered, "
+        f"{_lib_filtered_count} lib-filtered, "
+        f"{_freshness_filtered_count} freshness-filtered, "
+        f"{_claude_filtered_count} Claude-filtered → "
+        f"{total_alerted} alerted"
     )
     if _late_discoveries > 0:
         logging.warning(
@@ -1082,18 +1119,25 @@ def run():
     except Exception as e:
         logging.warning(f"Post-run analysis failed: {e}")
 
-    # Write run history row for adaptive scheduling analysis
+    # Write run history row for cost/efficiency/scheduling analysis
     try:
-        write_run_history(run_ts, interval_h, search_hours, total_results,
-                          len(_job_outcomes), total_alerted, _late_discoveries)
+        write_run_history(
+            run_ts, interval_h, search_hours, total_results,
+            len(_job_outcomes), total_alerted, _late_discoveries,
+            _claude_calls, _input_tokens, _output_tokens,
+            _quick_filtered_count, _lib_filtered_count,
+            _freshness_filtered_count, _claude_filtered_count,
+        )
     except Exception as e:
         logging.warning(f"run_history write failed: {e}")
 
     # Clear run-level state
     _seen_this_run.clear()
     _job_outcomes.clear()
-    global _late_discoveries
-    _late_discoveries = 0
+    global _late_discoveries, _claude_calls, _input_tokens, _output_tokens
+    global _quick_filtered_count, _lib_filtered_count, _freshness_filtered_count, _claude_filtered_count
+    _late_discoveries = _claude_calls = _input_tokens = _output_tokens = 0
+    _quick_filtered_count = _lib_filtered_count = _freshness_filtered_count = _claude_filtered_count = 0
 
 
 def compute_hours_old() -> tuple[float, float | None]:
@@ -1113,8 +1157,11 @@ def compute_hours_old() -> tuple[float, float | None]:
         return 4.0, None  # first run or corrupt file
 
 
-def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, alerted, late_discoveries):
-    """Append one row to run_history.csv for later analysis of adaptive scheduling."""
+def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, alerted,
+                      late_discoveries, claude_calls, input_tokens, output_tokens,
+                      quick_filtered, lib_filtered, freshness_filtered, claude_filtered):
+    """Append one row to run_history.csv for analysis of cost, efficiency, and scheduling."""
+    cost_usd = (input_tokens * _HAIKU_INPUT_COST_PER_M + output_tokens * _HAIKU_OUTPUT_COST_PER_M) / 1_000_000
     file_exists = os.path.exists(RUN_HISTORY_LOG)
     with open(RUN_HISTORY_LOG, "a", newline="") as f:
         writer = csv.writer(f)
@@ -1122,6 +1169,8 @@ def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, al
             writer.writerow([
                 "timestamp", "pt_hour", "interval_h", "hours_old",
                 "total_results", "new_jobs", "alerted", "late_discoveries",
+                "claude_calls", "input_tokens", "output_tokens", "cost_usd",
+                "quick_filtered", "lib_filtered", "freshness_filtered", "claude_filtered",
             ])
         from zoneinfo import ZoneInfo
         writer.writerow([
@@ -1133,6 +1182,14 @@ def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, al
             new_jobs,
             alerted,
             late_discoveries,
+            claude_calls,
+            input_tokens,
+            output_tokens,
+            f"{cost_usd:.4f}",
+            quick_filtered,
+            lib_filtered,
+            freshness_filtered,
+            claude_filtered,
         ])
 
 
