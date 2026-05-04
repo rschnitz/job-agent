@@ -29,7 +29,9 @@ DISCORD_USER_ID = os.getenv("DISCORD_USER_ID")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 INGEST_URL = os.getenv("INGEST_URL", "https://job-agent-henna.vercel.app/api/jobs/ingest")
 INGEST_API_KEY = os.getenv("INGEST_API_KEY")
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jobs.db")
+DB_PATH          = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jobs.db")
+LAST_RUN_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_run_ts")
+RUN_HISTORY_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "run_history.csv")
 
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "scraper.log")
 os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
@@ -724,6 +726,9 @@ def post_to_job_agent(job, analysis):
 # Track title+company combos seen this run to avoid duplicate Claude calls
 _seen_this_run = set()
 
+# Run-level late-discovery counter (jobs first seen with high applicant count)
+_late_discoveries = 0
+
 
 def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
     alerted = 0
@@ -842,13 +847,16 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
             continue
 
         # Late discovery flag: newly seen with high applicant count
+        global _late_discoveries
         discovery_applicants = job_dict.get("applicants")
         if discovery_applicants is not None:
             try:
                 n = int(discovery_applicants)
                 if n > 50:
+                    _late_discoveries += 1
                     logging.warning(f"LATE DISCOVERY ({n} applicants): {job_dict.get('title')} @ {job_dict.get('company')} -- investigate search coverage")
                 elif n > 25:
+                    _late_discoveries += 1
                     logging.warning(f"Late discovery ({n} applicants): {job_dict.get('title')} @ {job_dict.get('company')}")
             except (ValueError, TypeError):
                 pass
@@ -949,15 +957,14 @@ def run():
     total_alerted = 0
     run_ts = datetime.now(timezone.utc).isoformat()
 
-    # Determine hours_old based on time of day
-    # During frequent runs (daytime), use short window to maximize fresh results
-    # During infrequent runs (overnight), use longer window as safety net
-    from zoneinfo import ZoneInfo
-    pt_hour = datetime.now(ZoneInfo("America/Los_Angeles")).hour
-    if 7 <= pt_hour < 19:
-        search_hours = 4   # daytime: tight window, most results will be fresh
+    # Adaptive hours_old: 1.5 × interval since last run, floored at 30 min
+    search_hours, interval_h = compute_hours_old()
+    if interval_h is not None:
+        logging.info(f"hours_old={search_hours:.1f}h (interval since last run: {interval_h:.1f}h)")
     else:
-        search_hours = 24  # overnight: wider safety net
+        logging.info(f"hours_old={search_hours:.1f}h (no prior run recorded, using default)")
+
+    total_results = 0  # aggregate across all queries this run
 
     # Bay Area searches — single radius from Orinda covers SF, Oakland, Berkeley, Peninsula
     for search_term in SEARCH_TERMS:
@@ -972,7 +979,11 @@ def run():
                 job_type="fulltime",
             )
             if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (40mi from Orinda, {search_hours}h): {len(jobs_df)} results")
+                n = len(jobs_df)
+                total_results += n
+                logging.info(f"'{search_term}' (40mi from Orinda, {search_hours:.1f}h): {n} results")
+                if n >= 60:
+                    logging.warning(f"  SIGNAL: {n} results >= 60 — window may be too wide or posting volume high; consider tighter hours_old or higher run frequency")
                 log_query_results(search_term, "Orinda, CA (40mi)", jobs_df, run_ts)
                 total_alerted += process_jobs(jobs_df, conn)
         except Exception as e:
@@ -995,7 +1006,11 @@ def run():
                 is_remote=True,
             )
             if jobs_df is not None and not jobs_df.empty:
-                logging.info(f"'{search_term}' (remote, {search_hours}h): {len(jobs_df)} results")
+                n = len(jobs_df)
+                total_results += n
+                logging.info(f"'{search_term}' (remote, {search_hours:.1f}h): {n} results")
+                if n >= 60:
+                    logging.warning(f"  SIGNAL: {n} results >= 60 — window may be too wide; consider tighter hours_old or higher run frequency")
                 log_query_results(search_term, "United States (remote)", jobs_df, run_ts)
                 total_alerted += process_jobs(jobs_df, conn, is_remote=True)
         except Exception as e:
@@ -1029,7 +1044,9 @@ def run():
                     job_type="fulltime",
                 )
                 if jobs_df is not None and not jobs_df.empty:
-                    logging.info(f"'{search_term}' (domain, 72h): {len(jobs_df)} results")
+                    n = len(jobs_df)
+                    total_results += n
+                    logging.info(f"'{search_term}' (domain, 72h): {n} results")
                     log_query_results(search_term, "Orinda, CA (domain)", jobs_df, run_ts)
                     total_alerted += process_jobs(jobs_df, conn)
             except Exception as e:
@@ -1045,7 +1062,22 @@ def run():
         logging.warning(f"Applicant count update failed: {e}")
 
     conn.close()
-    logging.info(f"=== Scraper run complete. Jobs alerted: {total_alerted} ===")
+
+    # Persist last-run timestamp for next run's hours_old computation
+    with open(LAST_RUN_FILE, "w") as f:
+        f.write(datetime.now(timezone.utc).isoformat())
+
+    logging.info(
+        f"=== Scraper run complete: {total_alerted} alerted, "
+        f"{total_results} total results, "
+        f"{_late_discoveries} late discoveries, "
+        f"hours_old={search_hours:.1f}h ==="
+    )
+    if _late_discoveries > 0:
+        logging.warning(
+            f"SIGNAL: {_late_discoveries} late discover{'y' if _late_discoveries == 1 else 'ies'} this run — "
+            f"consider increasing scrape frequency for this time-of-day slot"
+        )
 
     # Write outcome log and print overlap summary
     try:
@@ -1054,9 +1086,58 @@ def run():
     except Exception as e:
         logging.warning(f"Post-run analysis failed: {e}")
 
+    # Write run history row for adaptive scheduling analysis
+    try:
+        write_run_history(run_ts, interval_h, search_hours, total_results,
+                          len(_job_outcomes), total_alerted, _late_discoveries)
+    except Exception as e:
+        logging.warning(f"run_history write failed: {e}")
+
     # Clear run-level state
     _seen_this_run.clear()
     _job_outcomes.clear()
+    global _late_discoveries
+    _late_discoveries = 0
+
+
+def compute_hours_old() -> tuple[float, float | None]:
+    """
+    Return (hours_old, interval_since_last_run_h).
+
+    hours_old = 1.5 × interval_since_last_run, floored at 0.5h (30 min).
+    Falls back to 4h when no prior run is recorded.
+    """
+    try:
+        with open(LAST_RUN_FILE) as f:
+            last_run = datetime.fromisoformat(f.read().strip())
+        interval_h = (datetime.now(timezone.utc) - last_run).total_seconds() / 3600
+        hours_old = max(0.5, interval_h * 1.5)
+        return hours_old, interval_h
+    except (FileNotFoundError, ValueError):
+        return 4.0, None  # first run or corrupt file
+
+
+def write_run_history(run_ts, interval_h, hours_old, total_results, new_jobs, alerted, late_discoveries):
+    """Append one row to run_history.csv for later analysis of adaptive scheduling."""
+    file_exists = os.path.exists(RUN_HISTORY_LOG)
+    with open(RUN_HISTORY_LOG, "a", newline="") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow([
+                "timestamp", "pt_hour", "interval_h", "hours_old",
+                "total_results", "new_jobs", "alerted", "late_discoveries",
+            ])
+        from zoneinfo import ZoneInfo
+        writer.writerow([
+            run_ts,
+            datetime.now(ZoneInfo("America/Los_Angeles")).hour,
+            f"{interval_h:.2f}" if interval_h is not None else "",
+            f"{hours_old:.2f}",
+            total_results,
+            new_jobs,
+            alerted,
+            late_discoveries,
+        ])
 
 
 def _print_overlap_summary(run_ts):
