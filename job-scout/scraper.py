@@ -975,6 +975,8 @@ def write_outcome_log(run_ts):
 
 
 def run():
+    global _late_discoveries, _claude_calls, _input_tokens, _output_tokens
+    global _quick_filtered_count, _lib_filtered_count, _freshness_filtered_count, _claude_filtered_count
     logging.info("=== Scraper run started ===")
     conn = init_db()
     total_alerted = 0
@@ -1134,8 +1136,6 @@ def run():
     # Clear run-level state
     _seen_this_run.clear()
     _job_outcomes.clear()
-    global _late_discoveries, _claude_calls, _input_tokens, _output_tokens
-    global _quick_filtered_count, _lib_filtered_count, _freshness_filtered_count, _claude_filtered_count
     _late_discoveries = _claude_calls = _input_tokens = _output_tokens = 0
     _quick_filtered_count = _lib_filtered_count = _freshness_filtered_count = _claude_filtered_count = 0
 
