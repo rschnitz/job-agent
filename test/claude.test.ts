@@ -61,6 +61,7 @@ describe("buildSystemPrompt", () => {
       applicant_count: null,
       rejection_reason: null,
       notes: null,
+      last_refreshed_at: null,
       created_at: new Date().toISOString(),
     };
     const prompt = buildSystemPrompt(baseProfile, job);
@@ -101,6 +102,7 @@ describe("buildSystemPrompt", () => {
       applicant_count: null,
       rejection_reason: null,
       notes: "Great culture, fast growth",
+      last_refreshed_at: null,
       created_at: new Date().toISOString(),
     };
     const prompt = buildSystemPrompt(null, job);

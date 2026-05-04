@@ -65,6 +65,7 @@ export type Job = {
   applicant_count: number | null;
   rejection_reason: string | null;
   notes: string | null;
+  last_refreshed_at: string | null;
   created_at: string;
 };
 

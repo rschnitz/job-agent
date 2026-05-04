@@ -28,6 +28,7 @@ create table if not exists jobs (
   applicant_count integer,
   rejection_reason text,
   notes text,
+  last_refreshed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -67,6 +68,9 @@ create policy "profiles_update" on profiles for update using (true);
 create policy "conversations_read" on conversations for select using (true);
 create policy "conversations_insert" on conversations for insert with check (true);
 create policy "conversations_update" on conversations for update using (true);
+
+-- Migration: add last_refreshed_at column (2026-05-03)
+-- alter table jobs add column if not exists last_refreshed_at timestamptz;
 
 -- Migration: add stage + outcome columns (2026-05-02)
 -- Run these if upgrading an existing database:
