@@ -65,6 +65,11 @@ COMMS_SEARCH_TERMS = []
 
 HIGH_CONVERSION_COMPANIES = []  # Not used for this profile
 
+# Gap/catchup thresholds
+CATCHUP_THRESHOLD_H   = 2.0   # gap > 2h triggers catchup mode
+CATCHUP_RESULTS       = 200   # results_wanted during catchup (vs 100 normal)
+CATCHUP_DOMAIN_RESULTS = 100  # domain results_wanted during catchup (vs 50 normal)
+
 # Single search center — 40mi radius covers SF, Oakland, Berkeley, and upper Peninsula
 SEARCH_CENTER = "Orinda, CA"
 SEARCH_RADIUS = 40  # miles
@@ -148,6 +153,10 @@ def init_db():
         pass
     try:
         conn.execute("ALTER TABLE seen_jobs ADD COLUMN score INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE seen_jobs ADD COLUMN found_by TEXT")
     except sqlite3.OperationalError:
         pass
     conn.execute("""
@@ -731,6 +740,9 @@ def post_to_job_agent(job, analysis):
 # Track title+company combos seen this run to avoid duplicate Claude calls
 _seen_this_run = set()
 
+# Track which search terms found each URL this run (keyed by job_url)
+_url_found_by: dict = {}  # url -> set of search term strings
+
 # Run-level counters — reset at end of each run
 _late_discoveries        = 0
 _claude_calls            = 0
@@ -746,7 +758,7 @@ _HAIKU_INPUT_COST_PER_M  = 0.80
 _HAIKU_OUTPUT_COST_PER_M = 4.00
 
 
-def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
+def process_jobs(jobs_df, conn, search_term="", is_intern=False, is_remote=False, is_prompt_eng=False, is_comms=False):
     alerted = 0
     seen_count = 0
     new_count = 0
@@ -755,6 +767,8 @@ def process_jobs(jobs_df, conn, is_intern=False, is_remote=False, is_prompt_eng=
         job_url = str(job_dict.get("job_url", ""))
         if not job_url:
             continue
+        if search_term:
+            _url_found_by.setdefault(job_url, set()).add(search_term)
         if is_seen(conn, job_url):
             seen_count += 1
             continue
@@ -970,9 +984,20 @@ def write_outcome_log(run_ts):
     with open(OUTCOME_LOG, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["timestamp", "job_url", "outcome", "score", "reason"])
+            writer.writerow(["timestamp", "job_url", "outcome", "score", "reason", "found_by"])
         for url, data in _job_outcomes.items():
-            writer.writerow([run_ts, url, data["outcome"], data["score"] or "", data["reason"]])
+            found_by = "|".join(sorted(_url_found_by.get(url, set())))
+            writer.writerow([run_ts, url, data["outcome"], data["score"] or "", data["reason"], found_by])
+
+
+def flush_found_by(conn):
+    """Write accumulated found_by sets to seen_jobs DB for all URLs seen this run."""
+    for url, terms in _url_found_by.items():
+        conn.execute(
+            "UPDATE seen_jobs SET found_by = ? WHERE job_url = ?",
+            ("|".join(sorted(terms)), url),
+        )
+    conn.commit()
 
 
 def run():
@@ -985,12 +1010,65 @@ def run():
 
     # Adaptive hours_old: 1.5 × interval since last run, floored at 30 min
     search_hours, interval_h = compute_hours_old()
-    if interval_h is not None:
+    catchup = interval_h is not None and interval_h > CATCHUP_THRESHOLD_H
+    if catchup:
+        logging.warning(
+            f"=== CATCHUP MODE: gap={interval_h:.1f}h > {CATCHUP_THRESHOLD_H}h threshold — "
+            f"hours_old={search_hours:.1f}h, results_wanted={CATCHUP_RESULTS} ==="
+        )
+    elif interval_h is not None:
         logging.info(f"hours_old={search_hours:.1f}h (interval since last run: {interval_h:.1f}h)")
     else:
         logging.info(f"hours_old={search_hours:.1f}h (no prior run recorded, using default)")
 
+    results_wanted      = CATCHUP_RESULTS        if catchup else 100
+    domain_results      = CATCHUP_DOMAIN_RESULTS if catchup else 50
+
     total_results = 0  # aggregate across all queries this run
+
+    # Domain-targeted searches — run first in catchup mode (highest yield: 5-7%)
+    # In normal mode, gated by DOMAIN_SEARCH_INTERVAL_HOURS to avoid over-querying
+    DOMAIN_SEARCH_INTERVAL_HOURS = 12
+    deep_search_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_deep_search")
+    run_deep = catchup  # always run in catchup; otherwise check timer
+    if not run_deep:
+        try:
+            with open(deep_search_file) as f:
+                last_deep = datetime.fromisoformat(f.read().strip())
+            if (datetime.now(timezone.utc) - last_deep).total_seconds() < DOMAIN_SEARCH_INTERVAL_HOURS * 3600:
+                run_deep = False
+            else:
+                run_deep = True
+        except (FileNotFoundError, ValueError):
+            run_deep = True
+
+    if run_deep:
+        domain_hours = max(1, round(search_hours)) if catchup else 72
+        label = f"catchup {search_hours:.1f}h" if catchup else "72h"
+        logging.info(f"Running domain-targeted search ({label}, results={domain_results})")
+        for search_term in DOMAIN_SEARCH_TERMS:
+            try:
+                jobs_df = scrape_jobs(
+                    site_name=["linkedin"],
+                    search_term=search_term,
+                    location="Orinda, CA",
+                    distance=40,
+                    results_wanted=domain_results,
+                    hours_old=domain_hours,
+                    job_type="fulltime",
+                )
+                if jobs_df is not None and not jobs_df.empty:
+                    n = len(jobs_df)
+                    total_results += n
+                    logging.info(f"'{search_term}' (domain, {label}): {n} results")
+                    log_query_results(search_term, "Orinda, CA (domain)", jobs_df, run_ts)
+                    total_alerted += process_jobs(jobs_df, conn, search_term=search_term)
+            except Exception as e:
+                logging.error(f"Error in domain search '{search_term}': {e}")
+            time.sleep(2)
+        if not catchup:
+            with open(deep_search_file, "w") as f:
+                f.write(datetime.now(timezone.utc).isoformat())
 
     # Bay Area searches — single radius from Orinda covers SF, Oakland, Berkeley, Peninsula
     for search_term in SEARCH_TERMS:
@@ -1000,7 +1078,7 @@ def run():
                 search_term=search_term,
                 location="Orinda, CA",
                 distance=40,
-                results_wanted=100,
+                results_wanted=results_wanted,
                 hours_old=max(1, round(search_hours)),
                 job_type="fulltime",
             )
@@ -1011,12 +1089,12 @@ def run():
                 if n >= 60:
                     logging.warning(f"  SIGNAL: {n} results >= 60 — window may be too wide or posting volume high; consider tighter hours_old or higher run frequency")
                 log_query_results(search_term, "Orinda, CA (40mi)", jobs_df, run_ts)
-                total_alerted += process_jobs(jobs_df, conn)
+                total_alerted += process_jobs(jobs_df, conn, search_term=search_term)
         except Exception as e:
             logging.error(f"Error scraping '{search_term}': {e}")
         time.sleep(2)
 
-    # Remote searches — consolidated with OR
+    # Remote searches — lowest yield (0.5%), run last
     REMOTE_SEARCH_TERMS = [
         '"Engineering Manager" OR "Senior Engineering Manager" OR "Director of Engineering"',
     ]
@@ -1026,7 +1104,7 @@ def run():
                 site_name=["linkedin"],
                 search_term=search_term,
                 location="United States",
-                results_wanted=100,
+                results_wanted=results_wanted,
                 hours_old=max(1, round(search_hours)),
                 job_type="fulltime",
                 is_remote=True,
@@ -1038,48 +1116,10 @@ def run():
                 if n >= 60:
                     logging.warning(f"  SIGNAL: {n} results >= 60 — window may be too wide; consider tighter hours_old or higher run frequency")
                 log_query_results(search_term, "United States (remote)", jobs_df, run_ts)
-                total_alerted += process_jobs(jobs_df, conn, is_remote=True)
+                total_alerted += process_jobs(jobs_df, conn, search_term=search_term, is_remote=True)
         except Exception as e:
             logging.error(f"Error scraping remote '{search_term}': {e}")
         time.sleep(2)
-
-    # Domain-targeted searches — additional, not replacement
-    # Catches niche roles in target domains with wider title range
-    DOMAIN_SEARCH_INTERVAL_HOURS = 12
-    deep_search_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", ".last_deep_search")
-    run_deep = True
-    try:
-        with open(deep_search_file) as f:
-            last_deep = datetime.fromisoformat(f.read().strip())
-        if (datetime.now(timezone.utc) - last_deep).total_seconds() < DOMAIN_SEARCH_INTERVAL_HOURS * 3600:
-            run_deep = False
-    except (FileNotFoundError, ValueError):
-        pass
-
-    if run_deep:
-        logging.info("Running domain-targeted search (72h window)")
-        for search_term in DOMAIN_SEARCH_TERMS:
-            try:
-                jobs_df = scrape_jobs(
-                    site_name=["linkedin"],
-                    search_term=search_term,
-                    location="Orinda, CA",
-                    distance=40,
-                    results_wanted=50,
-                    hours_old=72,
-                    job_type="fulltime",
-                )
-                if jobs_df is not None and not jobs_df.empty:
-                    n = len(jobs_df)
-                    total_results += n
-                    logging.info(f"'{search_term}' (domain, 72h): {n} results")
-                    log_query_results(search_term, "Orinda, CA (domain)", jobs_df, run_ts)
-                    total_alerted += process_jobs(jobs_df, conn)
-            except Exception as e:
-                logging.error(f"Error in domain search '{search_term}': {e}")
-            time.sleep(2)
-        with open(deep_search_file, "w") as f:
-            f.write(datetime.now(timezone.utc).isoformat())
 
     # Update applicant counts for high-rated seen jobs
     try:
@@ -1115,8 +1155,9 @@ def run():
             f"consider increasing scrape frequency for this time-of-day slot"
         )
 
-    # Write outcome log and print overlap summary
+    # Flush found_by to seen_jobs DB, then write outcome log
     try:
+        flush_found_by(conn)
         write_outcome_log(run_ts)
         _print_overlap_summary(run_ts)
     except Exception as e:
@@ -1137,6 +1178,7 @@ def run():
     # Clear run-level state
     _seen_this_run.clear()
     _job_outcomes.clear()
+    _url_found_by.clear()
     _late_discoveries = _claude_calls = _input_tokens = _output_tokens = 0
     _quick_filtered_count = _lib_filtered_count = _freshness_filtered_count = _claude_filtered_count = 0
 
