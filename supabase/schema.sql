@@ -29,6 +29,8 @@ create table if not exists jobs (
   rejection_reason text,
   notes text,
   last_refreshed_at timestamptz,
+  cover_letter_url text,
+  resume_url text,
   created_at timestamptz not null default now()
 );
 
@@ -68,6 +70,10 @@ create policy "profiles_update" on profiles for update using (true);
 create policy "conversations_read" on conversations for select using (true);
 create policy "conversations_insert" on conversations for insert with check (true);
 create policy "conversations_update" on conversations for update using (true);
+
+-- Migration: add cover_letter_url + resume_url columns (2026-05-08)
+-- alter table jobs add column if not exists cover_letter_url text;
+-- alter table jobs add column if not exists resume_url text;
 
 -- Migration: add last_refreshed_at column (2026-05-03)
 -- alter table jobs add column if not exists last_refreshed_at timestamptz;

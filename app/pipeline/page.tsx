@@ -64,13 +64,22 @@ function StatBox({ label, value }: { label: string; value: number }) {
   );
 }
 
+function resumeVariant(url: string | null): string {
+  if (!url) return "—";
+  const parts = url.split("/");
+  // Path: .../RAS/<Variant>/RaySchnitzler.pdf → second-to-last segment
+  const folder = parts[parts.length - 2] ?? "";
+  return folder || "—";
+}
+
 interface TableProps {
   jobs: Job[];
   warnCompanies?: Set<string>;   // multi-apply warning
   dupGroups?: Map<string, Job[]>; // duplicate title warning
+  showResume?: boolean;
 }
 
-function PipelineTable({ jobs, warnCompanies = new Set(), dupGroups = new Map() }: TableProps) {
+function PipelineTable({ jobs, warnCompanies = new Set(), dupGroups = new Map(), showResume = false }: TableProps) {
   if (jobs.length === 0) {
     return <p className="text-sm text-muted-foreground italic">None.</p>;
   }
@@ -91,6 +100,7 @@ function PipelineTable({ jobs, warnCompanies = new Set(), dupGroups = new Map() 
             <th className="px-3 py-2 text-left">Salary</th>
             <th className="px-3 py-2 text-left">Company</th>
             <th className="px-3 py-2 text-left">Role</th>
+            {showResume && <th className="px-3 py-2 text-left">Resume</th>}
             <th className="px-3 py-2 text-left">Last checked</th>
             <th className="px-3 py-2 text-left">Notes</th>
           </tr>
@@ -145,6 +155,11 @@ function PipelineTable({ jobs, warnCompanies = new Set(), dupGroups = new Map() 
                     </span>
                   )}
                 </td>
+                {showResume && (
+                  <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                    {resumeVariant(j.resume_url)}
+                  </td>
+                )}
                 <td className="px-3 py-2">
                   <span className={FRESH_CLS[fresh.cls]}>{fresh.label}</span>
                 </td>
@@ -262,7 +277,7 @@ export default function PipelinePage() {
       {/* Applied */}
       <section className="mb-8">
         <h2 className="text-base font-semibold mb-2">Applied ({applied.length})</h2>
-        <PipelineTable jobs={applied} warnCompanies={appliedByCompany} />
+        <PipelineTable jobs={applied} warnCompanies={appliedByCompany} showResume />
       </section>
 
       {/* Ready to Submit */}
@@ -272,7 +287,7 @@ export default function PipelinePage() {
           Confirm each posting is still open before submitting. † means no check_open run yet — do not submit blind.
           Set <code>stage=&apos;ready&apos;</code> on a job once its cover letter PDF is in the company folder.
         </SectionCallout>
-        <PipelineTable jobs={ready} />
+        <PipelineTable jobs={ready} showResume />
       </section>
 
       {/* Fit=8 Unprepped */}

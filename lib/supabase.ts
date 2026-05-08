@@ -58,6 +58,8 @@ export type Job = {
   rejection_reason: string | null;
   notes: string | null;
   last_refreshed_at: string | null;
+  cover_letter_url: string | null;
+  resume_url: string | null;
   created_at: string;
 };
 
