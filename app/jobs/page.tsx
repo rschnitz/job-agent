@@ -292,7 +292,7 @@ export default function JobsTablePage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, lib_score: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
-  const [showClosed, setShowClosed] = useState(false);
+  const [stageFilter, setStageFilter] = useState<"active" | "ready" | "applied" | "screening" | "all">("active");
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -303,10 +303,14 @@ export default function JobsTablePage() {
     });
   }, []);
 
-  const filteredJobs = useMemo(
-    () => showClosed ? jobs : jobs.filter((j) => !j.outcome || j.outcome === "active"),
-    [jobs, showClosed]
-  );
+  const filteredJobs = useMemo(() => {
+    const active = (j: Job) => !j.outcome || j.outcome === "active";
+    if (stageFilter === "all")       return jobs;
+    if (stageFilter === "ready")     return jobs.filter((j) => j.stage === "ready" && active(j));
+    if (stageFilter === "applied")   return jobs.filter((j) => j.stage === "applied" && active(j));
+    if (stageFilter === "screening") return jobs.filter((j) => ["acked","screened","interviewed"].includes(j.stage ?? "") && active(j));
+    return jobs.filter(active); // "active"
+  }, [jobs, stageFilter]);
 
   const table = useReactTable({
     data: filteredJobs,
@@ -332,7 +336,7 @@ export default function JobsTablePage() {
         <div>
           <h1 className="text-xl font-semibold">All Jobs</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {filteredJobs.length} jobs{!showClosed ? " (active)" : ""}
+            {filteredJobs.length} jobs{stageFilter !== "all" ? ` (${stageFilter})` : ""}
           </p>
         </div>
         <Link href="/">
@@ -352,30 +356,22 @@ export default function JobsTablePage() {
           className="max-w-xs h-8 text-sm"
         />
 
-        {/* Active / all toggle */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShowClosed(false)}
-            className={cn(
-              "text-[11px] px-2 py-1 rounded-full border transition-all",
-              !showClosed
-                ? "bg-primary/10 border-primary/30 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setShowClosed(true)}
-            className={cn(
-              "text-[11px] px-2 py-1 rounded-full border transition-all",
-              showClosed
-                ? "bg-primary/10 border-primary/30 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            All
-          </button>
+        {/* Stage filter pills */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(["active", "ready", "applied", "screening", "all"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setStageFilter(f)}
+              className={cn(
+                "text-[11px] px-2.5 py-1 rounded-full border transition-all capitalize",
+                stageFilter === f
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {f}
+            </button>
+          ))}
         </div>
 
         {/* Column picker */}
