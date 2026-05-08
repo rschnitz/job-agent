@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, List, MessageSquare, User } from "lucide-react";
+import { Briefcase, List, MessageSquare, User, LayoutList } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/", icon: Briefcase, label: "Board" },
   { href: "/jobs", icon: List, label: "Table" },
+  { href: "/pipeline", icon: LayoutList, label: "Pipeline" },
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
