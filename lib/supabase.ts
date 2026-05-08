@@ -15,6 +15,7 @@ export function createServiceClient() {
 
 export type Stage =
   | "new"
+  | "ready"
   | "applied"
   | "acked"
   | "screened"

@@ -15,6 +15,7 @@ import { CompanyAvatar } from "@/components/company-avatar";
 
 const STAGE_BUTTONS: { key: Stage; label: string }[] = [
   { key: "new",         label: "New" },
+  { key: "ready",       label: "Ready" },
   { key: "applied",     label: "Applied" },
   { key: "acked",       label: "Acked" },
   { key: "screened",    label: "Screened" },

@@ -12,10 +12,11 @@ import { Plus, X, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CompanyAvatar } from "@/components/company-avatar";
 
-type PipelineKey = "new" | "applied" | "screening" | "interviewed" | "offer" | "closed";
+type PipelineKey = "new" | "ready" | "applied" | "screening" | "interviewed" | "offer" | "closed";
 
 const PIPELINE_COLUMNS: { key: PipelineKey; label: string; match: (j: Job) => boolean }[] = [
   { key: "new",         label: "New",         match: (j) => (!j.stage || j.stage === "new") && (!j.outcome || j.outcome === "active") },
+  { key: "ready",       label: "Ready",       match: (j) => j.stage === "ready" && (!j.outcome || j.outcome === "active") },
   { key: "applied",     label: "Applied",     match: (j) => j.stage === "applied" && (!j.outcome || j.outcome === "active") },
   { key: "screening",   label: "Screening",   match: (j) => (j.stage === "acked" || j.stage === "screened") && (!j.outcome || j.outcome === "active") },
   { key: "interviewed", label: "Interviewed", match: (j) => j.stage === "interviewed" && (!j.outcome || j.outcome === "active") },
@@ -125,6 +126,7 @@ export default function JobBoard() {
 
   const stats = {
     total: jobs.length,
+    ready: jobs.filter((j) => j.stage === "ready" && (!j.outcome || j.outcome === "active")).length,
     applied: jobs.filter((j) => j.stage === "applied" && (!j.outcome || j.outcome === "active")).length,
     interviewing: jobs.filter((j) => ["acked","screened","interviewed"].includes(j.stage ?? "") && (!j.outcome || j.outcome === "active")).length,
     offers: jobs.filter((j) => j.stage === "offered" && (!j.outcome || j.outcome === "active")).length,
@@ -147,6 +149,7 @@ export default function JobBoard() {
       {!loading && (
         <div className="flex gap-3 mb-5 flex-wrap">
           <StatPill label="Total tracked" value={stats.total} />
+          <StatPill label="Ready to apply" value={stats.ready} highlight />
           <StatPill label="Applied" value={stats.applied} />
           <StatPill label="Interviewing" value={stats.interviewing} highlight />
           <StatPill label="Offers" value={stats.offers} highlight />
@@ -213,7 +216,7 @@ export default function JobBoard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {PIPELINE_COLUMNS.map(({ key, label }) => (
           <div key={key} className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-1">
