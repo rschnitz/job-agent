@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase, type Job, type JobStatus } from "@/lib/supabase";
+import { supabase, type Job, type Stage, type Outcome } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,15 @@ import { Plus, X, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CompanyAvatar } from "@/components/company-avatar";
 
-const STATUS_COLUMNS: { key: JobStatus; label: string }[] = [
-  { key: "new", label: "New" },
-  { key: "saved", label: "Saved" },
-  { key: "applied", label: "Applied" },
-  { key: "interviewing", label: "Interviewing" },
-  { key: "offer", label: "Offer" },
-  { key: "rejected", label: "Rejected" },
+type PipelineKey = "new" | "applied" | "screening" | "interviewed" | "offer" | "closed";
+
+const PIPELINE_COLUMNS: { key: PipelineKey; label: string; match: (j: Job) => boolean }[] = [
+  { key: "new",         label: "New",         match: (j) => (!j.stage || j.stage === "new") && (!j.outcome || j.outcome === "active") },
+  { key: "applied",     label: "Applied",     match: (j) => j.stage === "applied" && (!j.outcome || j.outcome === "active") },
+  { key: "screening",   label: "Screening",   match: (j) => (j.stage === "acked" || j.stage === "screened") && (!j.outcome || j.outcome === "active") },
+  { key: "interviewed", label: "Interviewed", match: (j) => j.stage === "interviewed" && (!j.outcome || j.outcome === "active") },
+  { key: "offer",       label: "Offer",       match: (j) => j.stage === "offered" && (!j.outcome || j.outcome === "active") },
+  { key: "closed",      label: "Closed",      match: (j) => !!j.outcome && j.outcome !== "active" },
 ];
 
 
@@ -97,17 +99,17 @@ export default function JobBoard() {
     const reason = prompt("Why are you passing on this role? (helps improve future filtering)");
     if (reason === null) return; // cancelled
     await supabase.from("jobs").update({
-      status: "rejected",
+      outcome: "rejected",
       rejection_reason: reason || undefined,
     }).eq("id", id);
-    setJobs((prev) => prev.map((j) => j.id === id ? { ...j, status: "rejected" as JobStatus, rejection_reason: reason } : j));
+    setJobs((prev) => prev.map((j) => j.id === id ? { ...j, outcome: "rejected" as Outcome, rejection_reason: reason } : j));
   }
 
   async function addJob() {
     if (!newJob.title || !newJob.company || adding) return;
     setAdding(true);
     setAddError(null);
-    const { error } = await supabase.from("jobs").insert({ ...newJob, status: "new" });
+    const { error } = await supabase.from("jobs").insert({ ...newJob, stage: "new", outcome: "active" });
     setAdding(false);
     if (error) {
       setAddError("Failed to add job. Check your database connection.");
@@ -118,13 +120,14 @@ export default function JobBoard() {
     fetchJobs();
   }
 
-  const jobsByStatus = (status: JobStatus) => jobs.filter((j) => j.status === status);
+  const jobsByColumn = (key: PipelineKey) =>
+    jobs.filter(PIPELINE_COLUMNS.find((c) => c.key === key)!.match);
 
   const stats = {
     total: jobs.length,
-    applied: jobs.filter((j) => j.status === "applied").length,
-    interviewing: jobs.filter((j) => j.status === "interviewing").length,
-    offers: jobs.filter((j) => j.status === "offer").length,
+    applied: jobs.filter((j) => j.stage === "applied" && (!j.outcome || j.outcome === "active")).length,
+    interviewing: jobs.filter((j) => ["acked","screened","interviewed"].includes(j.stage ?? "") && (!j.outcome || j.outcome === "active")).length,
+    offers: jobs.filter((j) => j.stage === "offered" && (!j.outcome || j.outcome === "active")).length,
   };
 
   return (
@@ -211,14 +214,14 @@ export default function JobBoard() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {STATUS_COLUMNS.map(({ key, label }) => (
+        {PIPELINE_COLUMNS.map(({ key, label }) => (
           <div key={key} className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {label}
               </span>
               <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none tabular-nums">
-                {loading ? "–" : jobsByStatus(key).length}
+                {loading ? "–" : jobsByColumn(key).length}
               </span>
             </div>
             <div className="space-y-2 min-h-[80px]">
@@ -228,13 +231,11 @@ export default function JobBoard() {
                     <SkeletonCard />
                     <SkeletonCard />
                   </>
-                ) : key === "saved" ? (
-                  <SkeletonCard />
                 ) : null
-              ) : jobsByStatus(key).length === 0 ? (
+              ) : jobsByColumn(key).length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/50 min-h-[60px]" />
               ) : (
-                jobsByStatus(key).map((job) => (
+                jobsByColumn(key).map((job) => (
                   <div key={job.id} className="relative group">
                     <Link href={`/jobs/${job.id}`}>
                       <Card className="p-3 hover:border-primary/30 hover:bg-accent/40 transition-all cursor-pointer group">

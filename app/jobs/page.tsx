@@ -13,7 +13,7 @@ import {
   type VisibilityState,
   flexRender,
 } from "@tanstack/react-table";
-import { supabase, type Job, type JobStatus } from "@/lib/supabase";
+import { supabase, type Job, jobDisplayStatus } from "@/lib/supabase";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,19 @@ import { CompanyAvatar } from "@/components/company-avatar";
 import { ArrowUpDown, ExternalLink, Columns3, X, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const STATUS_ORDER: Record<JobStatus, number> = {
-  offer: 0,
-  interviewing: 1,
-  applied: 2,
-  saved: 3,
-  new: 4,
-  rejected: 5,
+const DISPLAY_STATUS_ORDER: Record<string, number> = {
+  offered: 0,
+  interviewed: 1,
+  screened: 2,
+  acked: 3,
+  applied: 4,
+  new: 5,
+  accepted: 6,
+  rejected: 7,
+  withdrawn: 8,
+  ghosted: 9,
+  closed: 10,
+  declined: 11,
 };
 
 const AGENCY_COMPANIES = new Set([
@@ -75,7 +81,7 @@ function computePriority(job: Job): number {
   return (merit + compAdj) * recency * agency;
 }
 
-const ALL_STATUSES: JobStatus[] = ["new", "saved", "applied", "interviewing", "offer", "rejected"];
+const ACTIVE_STAGES = new Set(["new", "applied", "acked", "screened", "interviewed", "offered"]);
 
 const columns: ColumnDef<Job>[] = [
   {
@@ -129,18 +135,20 @@ const columns: ColumnDef<Job>[] = [
     ),
   },
   {
-    accessorKey: "status",
+    id: "displayStatus",
     header: ({ column }) => (
       <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
         Status <ArrowUpDown className="h-3 w-3" />
       </button>
     ),
-    cell: ({ row }) => (
-      <Badge variant={row.original.status as any} className="text-[11px]">
-        {row.original.status}
-      </Badge>
-    ),
-    sortingFn: (a, b) => STATUS_ORDER[a.original.status] - STATUS_ORDER[b.original.status],
+    accessorFn: (row) => jobDisplayStatus(row),
+    cell: ({ row }) => {
+      const ds = jobDisplayStatus(row.original);
+      return <Badge variant={ds as any} className="text-[11px]">{ds}</Badge>;
+    },
+    sortingFn: (a, b) =>
+      (DISPLAY_STATUS_ORDER[jobDisplayStatus(a.original)] ?? 99) -
+      (DISPLAY_STATUS_ORDER[jobDisplayStatus(b.original)] ?? 99),
   },
   {
     accessorKey: "ras_fit",
@@ -283,7 +291,7 @@ export default function JobsTablePage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, lib_score: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Set<JobStatus>>(new Set(["new", "saved", "applied", "interviewing", "offer"]));
+  const [showClosed, setShowClosed] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -295,8 +303,8 @@ export default function JobsTablePage() {
   }, []);
 
   const filteredJobs = useMemo(
-    () => jobs.filter((j) => statusFilter.has(j.status)),
-    [jobs, statusFilter]
+    () => showClosed ? jobs : jobs.filter((j) => !j.outcome || j.outcome === "active"),
+    [jobs, showClosed]
   );
 
   const table = useReactTable({
@@ -312,14 +320,6 @@ export default function JobsTablePage() {
     getFilteredRowModel: getFilteredRowModel(),
   });
 
-  const toggleStatus = (s: JobStatus) => {
-    setStatusFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
-      return next;
-    });
-  };
 
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
@@ -331,7 +331,7 @@ export default function JobsTablePage() {
         <div>
           <h1 className="text-xl font-semibold">All Jobs</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {filteredJobs.length} jobs{statusFilter.size < 6 ? " (filtered)" : ""}
+            {filteredJobs.length} jobs{!showClosed ? " (active)" : ""}
           </p>
         </div>
         <Link href="/">
@@ -351,22 +351,30 @@ export default function JobsTablePage() {
           className="max-w-xs h-8 text-sm"
         />
 
-        {/* Status filter pills */}
+        {/* Active / all toggle */}
         <div className="flex items-center gap-1.5">
-          {ALL_STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => toggleStatus(s)}
-              className={cn(
-                "text-[11px] px-2 py-1 rounded-full border transition-all capitalize",
-                statusFilter.has(s)
-                  ? "bg-primary/10 border-primary/30 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {s}
-            </button>
-          ))}
+          <button
+            onClick={() => setShowClosed(false)}
+            className={cn(
+              "text-[11px] px-2 py-1 rounded-full border transition-all",
+              !showClosed
+                ? "bg-primary/10 border-primary/30 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setShowClosed(true)}
+            className={cn(
+              "text-[11px] px-2 py-1 rounded-full border transition-all",
+              showClosed
+                ? "bg-primary/10 border-primary/30 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All
+          </button>
         </div>
 
         {/* Column picker */}

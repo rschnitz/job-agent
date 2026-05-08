@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { supabase, type Job, type JobStatus, type Message } from "@/lib/supabase";
+import { supabase, type Job, type Stage, type Outcome, type Message, jobDisplayStatus } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,13 +13,22 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { CompanyAvatar } from "@/components/company-avatar";
 
-const STATUSES: { key: JobStatus; label: string }[] = [
-  { key: "new", label: "New" },
-  { key: "saved", label: "Saved" },
-  { key: "applied", label: "Applied" },
-  { key: "interviewing", label: "Interviewing" },
-  { key: "offer", label: "Offer" },
-  { key: "rejected", label: "Rejected" },
+const STAGE_BUTTONS: { key: Stage; label: string }[] = [
+  { key: "new",         label: "New" },
+  { key: "applied",     label: "Applied" },
+  { key: "acked",       label: "Acked" },
+  { key: "screened",    label: "Screened" },
+  { key: "interviewed", label: "Interviewed" },
+  { key: "offered",     label: "Offered" },
+];
+
+const OUTCOME_BUTTONS: { key: Outcome; label: string }[] = [
+  { key: "active",    label: "Active" },
+  { key: "rejected",  label: "Rejected" },
+  { key: "withdrawn", label: "Withdrawn" },
+  { key: "ghosted",   label: "Ghosted" },
+  { key: "accepted",  label: "Accepted" },
+  { key: "declined",  label: "Declined" },
 ];
 
 export default function JobDetail() {
@@ -73,24 +82,14 @@ export default function JobDetail() {
     }
   }
 
-  // Stage watermark for manual status changes
-  const STATUS_TO_STAGE: Record<string, string> = {
-    applied:      "applied",
-    interviewing: "interviewed",
-    offer:        "offered",
-  };
-  const STATUS_TO_OUTCOME: Record<string, string> = {
-    rejected: "rejected",
-  };
+  async function updateStage(stage: Stage) {
+    await supabase.from("jobs").update({ stage }).eq("id", id);
+    setJob((j) => j ? { ...j, stage } : j);
+  }
 
-  async function updateStatus(status: JobStatus) {
-    const patch: Record<string, string> = { status };
-    const newStage = STATUS_TO_STAGE[status];
-    const newOutcome = STATUS_TO_OUTCOME[status];
-    if (newStage) patch.stage = newStage;
-    if (newOutcome) patch.outcome = newOutcome;
-    await supabase.from("jobs").update(patch).eq("id", id);
-    setJob((j) => j ? { ...j, status, ...(newStage ? { stage: newStage as any } : {}), ...(newOutcome ? { outcome: newOutcome as any } : {}) } : j);
+  async function updateOutcome(outcome: Outcome) {
+    await supabase.from("jobs").update({ outcome }).eq("id", id);
+    setJob((j) => j ? { ...j, outcome } : j);
   }
 
   async function saveNotes() {
@@ -101,11 +100,10 @@ export default function JobDetail() {
     const reason = prompt("Why are you passing on this role? (helps improve future filtering)");
     if (reason === null) return;
     await supabase.from("jobs").update({
-      status: "rejected",
       outcome: "rejected",
       rejection_reason: reason || undefined,
     }).eq("id", id);
-    setJob((j) => j ? { ...j, status: "rejected" as JobStatus, outcome: "rejected" as any, rejection_reason: reason } : j);
+    setJob((j) => j ? { ...j, outcome: "rejected" as Outcome, rejection_reason: reason } : j);
   }
 
   async function sendMessage() {
@@ -201,8 +199,8 @@ export default function JobDetail() {
                     <p className="text-muted-foreground mt-0.5 text-sm">{job.company}</p>
                   </div>
                 </div>
-                <Badge variant={job.status as any} className="shrink-0 mt-0.5">
-                  {job.status}
+                <Badge variant={jobDisplayStatus(job) as any} className="shrink-0 mt-0.5">
+                  {jobDisplayStatus(job)}
                 </Badge>
               </div>
               {job.url && (
@@ -217,25 +215,44 @@ export default function JobDetail() {
                 </a>
               )}
             </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">
-                Status
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {STATUSES.map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => updateStatus(key)}
-                    className={cn(
-                      "text-xs px-2.5 py-1 rounded-full border transition-all",
-                      job.status === key
-                        ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                        : "border-border text-muted-foreground hover:border-border hover:text-foreground hover:bg-accent"
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1.5">Stage</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {STAGE_BUTTONS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => updateStage(key)}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-full border transition-all",
+                        job.stage === key
+                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                          : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1.5">Outcome</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {OUTCOME_BUTTONS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => updateOutcome(key)}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-full border transition-all",
+                        job.outcome === key
+                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                          : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>

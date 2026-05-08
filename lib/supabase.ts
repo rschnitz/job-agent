@@ -13,14 +13,6 @@ export function createServiceClient() {
   );
 }
 
-export type JobStatus =
-  | "new"
-  | "saved"
-  | "applied"
-  | "interviewing"
-  | "offer"
-  | "rejected";
-
 export type Stage =
   | "new"
   | "applied"
@@ -46,7 +38,6 @@ export type Job = {
   url: string | null;
   description: string | null;
   source: string | null;
-  status: JobStatus;
   stage: Stage | null;
   outcome: Outcome | null;
   haiku_score: number | null;
@@ -80,6 +71,11 @@ export type Message = {
   role: "user" | "assistant";
   content: string;
 };
+
+export function jobDisplayStatus(job: Pick<Job, "stage" | "outcome">): string {
+  if (job.outcome && job.outcome !== "active") return job.outcome;
+  return job.stage ?? "new";
+}
 
 export type Conversation = {
   id: string;
