@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   useReactTable,
@@ -11,6 +11,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type RowSelectionState,
   flexRender,
 } from "@tanstack/react-table";
 import { supabase, type Job, jobDisplayStatus } from "@/lib/supabase";
@@ -86,6 +87,30 @@ const ACTIVE_STAGES = new Set(["new", "applied", "acked", "screened", "interview
 
 const columns: ColumnDef<Job>[] = [
   {
+    id: "select",
+    header: ({ table }) => (
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 rounded border-border cursor-pointer accent-primary"
+        checked={table.getIsAllPageRowsSelected()}
+        ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected(); }}
+        onChange={table.getToggleAllPageRowsSelectedHandler()}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 rounded border-border cursor-pointer accent-primary"
+        checked={row.getIsSelected()}
+        onChange={row.getToggleSelectedHandler()}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     accessorKey: "ras_id",
     header: "J-ID",
     cell: ({ row }) => (
@@ -107,6 +132,7 @@ const columns: ColumnDef<Job>[] = [
       return <span className={`text-sm tabular-nums ${color}`}>{p.toFixed(0)}</span>;
     },
     sortingFn: "basic",
+    sortDescFirst: true,
   },
   {
     accessorKey: "company",
@@ -164,6 +190,7 @@ const columns: ColumnDef<Job>[] = [
       const color = fit >= 8 ? "text-emerald-600 font-semibold" : fit >= 7 ? "text-foreground" : "text-muted-foreground";
       return <span className={`text-sm tabular-nums ${color}`}>{fit}</span>;
     },
+    sortDescFirst: true,
   },
   {
     accessorKey: "ras_interest",
@@ -178,6 +205,7 @@ const columns: ColumnDef<Job>[] = [
       const color = suit >= 85 ? "text-emerald-600 font-semibold" : suit >= 70 ? "text-foreground" : "text-muted-foreground";
       return <span className={`text-sm tabular-nums ${color}`}>{suit}</span>;
     },
+    sortDescFirst: true,
   },
   {
     accessorKey: "lib_score",
@@ -192,6 +220,7 @@ const columns: ColumnDef<Job>[] = [
       const color = s >= 75 ? "text-emerald-600 font-semibold" : s >= 60 ? "text-foreground" : "text-muted-foreground";
       return <span className={`text-sm tabular-nums ${color}`}>{s}</span>;
     },
+    sortDescFirst: true,
   },
   {
     accessorKey: "haiku_score",
@@ -205,6 +234,7 @@ const columns: ColumnDef<Job>[] = [
       if (h == null) return <span className="text-xs text-muted-foreground">—</span>;
       return <span className="text-sm tabular-nums text-muted-foreground">{h}</span>;
     },
+    sortDescFirst: true,
   },
   {
     accessorKey: "salary_max",
@@ -220,6 +250,7 @@ const columns: ColumnDef<Job>[] = [
       if (max) return <span className="text-xs tabular-nums">Up to ${Math.round(max/1000)}k</span>;
       return <span className="text-xs text-muted-foreground">—</span>;
     },
+    sortDescFirst: true,
   },
   {
     accessorKey: "location",
@@ -245,22 +276,37 @@ const columns: ColumnDef<Job>[] = [
   {
     accessorKey: "source",
     header: "Source",
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground capitalize">{row.original.source ?? "manual"}</span>
-    ),
+    cell: ({ row }) => {
+      const s = row.original.source ?? "";
+      let label: string;
+      if (s === "linkedin")                      label = "LI-JA";
+      else if (s === "search")                   label = "LI-RAS";
+      else if (s === "saved" || s === "linkedin_saved") label = "LI-Saved";
+      else if (s === "excel_import" || s === "manual" || s === "ras" || s === "") label = "LI";
+      else if (s === "synthetic_probe")          label = "Probe";
+      else if (s === "Greenhouse / Direct")      label = "Direct";
+      else                                       label = s.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()) + " Email";
+      return <span className="text-xs text-muted-foreground">{label}</span>;
+    },
   },
   {
-    accessorKey: "created_at",
+    id: "posted_date",
+    accessorFn: (row) => row.posted_at ?? row.created_at,
+    sortDescFirst: true,
     header: ({ column }) => (
       <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => column.toggleSorting()}>
-        Added <ArrowUpDown className="h-3 w-3" />
+        Posted <ArrowUpDown className="h-3 w-3" />
       </button>
     ),
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {new Date(row.original.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const date = row.original.posted_at ?? row.original.created_at;
+      const isEstimated = !row.original.posted_at;
+      return (
+        <span className={`text-xs tabular-nums ${isEstimated ? "text-muted-foreground/60" : "text-muted-foreground"}`} title={isEstimated ? "Estimated (added date)" : "Original posting date"}>
+          {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </span>
+      );
+    },
   },
   {
     accessorKey: "url",
@@ -293,6 +339,8 @@ export default function JobsTablePage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ notes: false, source: false, applicant_count: false, lib_score: false, haiku_score: false });
   const [globalFilter, setGlobalFilter] = useState("");
   const [stageFilter, setStageFilter] = useState<"active" | "ready" | "applied" | "screening" | "all">("active");
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -315,15 +363,36 @@ export default function JobsTablePage() {
   const table = useReactTable({
     data: filteredJobs,
     columns,
-    state: { sorting, columnFilters, columnVisibility, globalFilter },
+    state: { sorting, columnFilters, columnVisibility, globalFilter, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
+
+  const handleBulkAction = useCallback(async (action: "ready" | "closed" | "rejected") => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    const ids = selectedRows.map((r) => r.original.id);
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      let patch: Record<string, string>;
+      if (action === "ready")    patch = { stage: "ready",   outcome: "active",   status: "ready" };
+      else if (action === "closed")   patch = { outcome: "closed",   status: "closed" };
+      else                            patch = { outcome: "rejected", status: "rejected" };
+      await supabase.from("jobs").update(patch).in("id", ids);
+      const { data } = await supabase.from("jobs").select("*").order("created_at", { ascending: false });
+      setJobs(data ?? []);
+      setRowSelection({});
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [table]);
 
 
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -403,6 +472,33 @@ export default function JobsTablePage() {
           )}
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {Object.keys(rowSelection).length > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 mb-3 bg-primary/5 border border-primary/20 rounded-lg">
+          <span className="text-sm font-medium text-primary">
+            {table.getSelectedRowModel().rows.length} selected
+          </span>
+          <div className="flex gap-2 ml-auto">
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={bulkLoading}
+              onClick={() => handleBulkAction("ready")}>
+              Mark Ready
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={bulkLoading}
+              onClick={() => handleBulkAction("closed")}>
+              Close
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" disabled={bulkLoading}
+              onClick={() => handleBulkAction("rejected")}>
+              Reject
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRowSelection({})}>
+              <X className="h-3 w-3 mr-1" />
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-lg border border-border">

@@ -12,6 +12,7 @@ Usage:
     --force     Ignore last_refreshed_at; refresh all eligible jobs
 """
 
+import math
 import os
 import re
 import sys
@@ -55,11 +56,22 @@ REQUEST_TIMEOUT = 15
 REQUEST_DELAY_RANGE = (1.5, 3.5)  # seconds between fetches
 
 # Refresh intervals (hours) — applicant count beats interest score
-INTERVAL_FEW_APPLICANTS_1  = 1   # < 25 applicants: very competitive, check often
-INTERVAL_FEW_APPLICANTS_2  = 2   # < 50 applicants
-INTERVAL_HOT               = 6   # high interest/fit score
-INTERVAL_WARM              = 12  # mid-tier
-INTERVAL_COLD              = 24  # low/unscored
+INTERVAL_FEW_APPLICANTS_1  = 1    # < 25 applicants: very competitive, check often
+INTERVAL_FEW_APPLICANTS_2  = 2    # < 50 applicants
+INTERVAL_HOT               = 6    # high interest/fit score
+INTERVAL_WARM              = 12   # mid-tier
+INTERVAL_COLD              = 24   # low/unscored
+INTERVAL_STALE             = 96   # 4 days: confirmed low-fit (ras_fit 3-4)
+INTERVAL_FROZEN            = 168  # 7 days: very low fit (ras_fit 1-2)
+
+# Agency companies — kept in sync with AGENCY_COMPANIES in jobs/page.tsx
+AGENCY_COMPANIES = {
+    "jobgether", "remotehunter", "harnham", "lensa", "jobs via dice",
+    "futuretech recruitment", "harrison clarke", "day one partners", "andiamo",
+    "empathy talent", "coffeespace", "saragossa", "jack & jill", "techtree",
+    "elios talent", "tessera data", "code red partners", "ladders", "nextdeavor",
+    "vocator", "gruve",
+}
 
 # NLAA detection patterns (LinkedIn + common ATS)
 NLAA_PATTERNS = [
@@ -109,8 +121,8 @@ def refresh_interval_hours(job: dict) -> int:
 
     Priority order:
       1. Applicant count (competitive signal, actionable regardless of score)
-      2. Interest/fit score
-      3. Default cold tier
+      2. Interest/fit score (high-fit jobs checked often; low-fit checked rarely)
+      3. Default cold tier for unscored
     """
     count    = job.get("applicant_count")
     interest = job.get("ras_interest")
@@ -124,7 +136,11 @@ def refresh_interval_hours(job: dict) -> int:
         return INTERVAL_HOT
     if (interest is not None and interest >= 70) or (fit is not None and fit >= 7):
         return INTERVAL_WARM
-    return INTERVAL_COLD
+    if fit is not None and fit <= 2:
+        return INTERVAL_FROZEN
+    if fit is not None and fit <= 4:
+        return INTERVAL_STALE
+    return INTERVAL_COLD  # unscored or fit 5-6
 
 
 def is_due(job: dict, force: bool = False) -> bool:
@@ -138,6 +154,49 @@ def is_due(job: dict, force: bool = False) -> bool:
         return datetime.now(timezone.utc) - last_dt > timedelta(hours=refresh_interval_hours(job))
     except (ValueError, TypeError):
         return True
+
+
+def compute_priority(job: dict) -> float:
+    """Python port of computePriority() from jobs/page.tsx. Keep in sync."""
+    ras_interest = job.get("ras_interest")
+    lib_score    = job.get("lib_score")
+    haiku_score  = job.get("haiku_score")
+    ras_fit      = job.get("ras_fit")
+
+    suit = (ras_interest if ras_interest is not None
+            else lib_score if lib_score is not None
+            else (haiku_score * 10 if haiku_score is not None else 0))
+
+    merit = (suit * 0.4 + ras_fit * 7.5) if ras_fit is not None else (suit * 0.7 + 15)
+
+    comp_adj = 0.0
+    sal_min, sal_max = job.get("salary_min"), job.get("salary_max")
+    if sal_min and sal_max:
+        r        = sal_max - sal_min
+        lo       = sal_min + 0.1 * r
+        hi       = sal_max - 0.1 * r
+        sal_est  = min(hi, max(lo, (200_000 + sal_min + sal_max) / 3))
+        if sal_est < 180_000:
+            comp_adj = max(-10.0, -3 + (sal_est - 180_000) / 40_000 * 7)
+        elif sal_est < 200_000:
+            comp_adj = -3 * (200_000 - sal_est) / 20_000
+        elif sal_est < 220_000:
+            comp_adj = 3 * (sal_est - 200_000) / 20_000
+        else:
+            comp_adj = 3 + 12 * (1 - math.exp(-(sal_est - 220_000) / 100_000))
+
+    recency = 0.50
+    if job.get("posted_at"):
+        try:
+            posted_dt = datetime.fromisoformat(job["posted_at"].replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - posted_dt).total_seconds() / 86400
+            recency = 0.50 + 0.45 * math.exp(-age / 14) + 0.35 * math.exp(-age / 1.5)
+        except (ValueError, TypeError):
+            pass
+
+    agency = 0.75 if (job.get("company") or "").lower() in AGENCY_COMPANIES else 1.0
+
+    return (merit + comp_adj) * recency * agency
 
 
 # ── Page fetching & parsing ────────────────────────────────────────────────────
@@ -204,6 +263,72 @@ def parse_applicant_count(html: str) -> int | None:
             except ValueError:
                 pass
     return None
+
+
+def parse_posted_date(html: str) -> str | None:
+    """
+    Extract original posting date from job page HTML.
+    Returns ISO date string (YYYY-MM-DD) anchored to fetch time, or None.
+    Kept in sync with parse_posted_date() in scraper.py.
+    """
+    if not html:
+        return None
+    soup = BeautifulSoup(html, "html.parser")
+
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+            items = [data] if isinstance(data, dict) else data
+            for item in items:
+                if isinstance(item, dict) and "datePosted" in item:
+                    return item["datePosted"][:10]
+        except Exception:
+            pass
+
+    page_text = soup.get_text()
+    for pattern, unit in [
+        (r"(?:posted|reposted)\s+(\d+)\s+hour",  "hours"),
+        (r"(?:posted|reposted)\s+(\d+)\s+day",   "days"),
+        (r"(?:posted|reposted)\s+(\d+)\s+week",  "weeks"),
+        (r"(?:posted|reposted)\s+(\d+)\s+month", "months"),
+    ]:
+        m = re.search(pattern, page_text, re.IGNORECASE)
+        if m:
+            n = int(m.group(1))
+            now = datetime.now(timezone.utc)
+            if unit == "hours":
+                dt = now - timedelta(hours=n)
+            elif unit == "days":
+                dt = now - timedelta(days=n)
+            elif unit == "weeks":
+                dt = now - timedelta(weeks=n)
+            else:
+                dt = now - timedelta(days=n * 30)
+            return dt.strftime("%Y-%m-%d")
+
+    return None
+
+
+def _cache_update_posted_at(url: str, posted_at: str):
+    """Write posted_at into the cache meta.json for a job, if a cache entry exists."""
+    import re as _re
+    m = _re.search(r"/(\d+)$", url)
+    if not m:
+        return
+    meta_path = os.path.join(
+        os.path.expanduser("~/.cache/job-search/postings"), m.group(1), "meta.json"
+    )
+    if not os.path.exists(meta_path):
+        return
+    try:
+        with open(meta_path) as f:
+            meta = json.load(f)
+        if meta.get("posted_at") != posted_at:
+            meta["posted_at"] = posted_at
+            with open(meta_path, "w") as f:
+                json.dump(meta, f)
+    except Exception:
+        pass
 
 
 def parse_description(html: str) -> str | None:
@@ -280,17 +405,27 @@ def run(dry_run: bool = False, max_refreshes: int = DEFAULT_MAX_REFRESHES, force
 
     jobs = supa_get(
         "jobs?select=id,ras_id,title,company,url,stage,outcome,"
-        "ras_interest,ras_fit,last_refreshed_at,applicant_count,"
-        "salary_min,salary_max,description"
+        "ras_interest,ras_fit,lib_score,haiku_score,last_refreshed_at,applicant_count,"
+        "salary_min,salary_max,description,created_at,posted_at"
         "&outcome=not.in.(closed,accepted,declined,withdrawn)"
         "&url=not.is.null"
-        "&limit=500"
+        "&order=last_refreshed_at.asc.nullsfirst"
+        "&limit=2000"
     )
     logging.info(f"Fetched {len(jobs)} candidate jobs from Supabase")
 
     due = [j for j in jobs if j.get("url") and is_due(j, force=force)]
-    # Sort: most urgent (shortest interval) first
-    due.sort(key=lambda j: refresh_interval_hours(j))
+
+    def _refresh_priority(job: dict) -> float:
+        # Use the same priority formula as /jobs page so the jobs shown first
+        # to the user are always the ones refreshed first.
+        pri = compute_priority(job)
+        # Never-refreshed: no state known — always check before any refreshed job.
+        if job.get("last_refreshed_at") is None:
+            pri += 10_000
+        return -pri  # sort ascending → highest priority first
+
+    due.sort(key=_refresh_priority)
     logging.info(f"{len(due)} jobs due for refresh (capped at {max_refreshes})")
     due = due[:max_refreshes]
 
@@ -339,6 +474,15 @@ def run(dry_run: bool = False, max_refreshes: int = DEFAULT_MAX_REFRESHES, force
                     patch["description"] = desc
                     changes.append(f"description ({len(desc)} chars)")
                     stats["backfilled"] += 1
+
+            # Backfill posted_at if missing
+            if html and not job.get("posted_at"):
+                posted_at = parse_posted_date(html)
+                if posted_at:
+                    patch["posted_at"] = posted_at
+                    changes.append(f"posted_at {posted_at}")
+                    stats["backfilled"] += 1
+                    _cache_update_posted_at(url, posted_at)
 
             if not changes:
                 stats["unchanged"] += 1

@@ -234,7 +234,7 @@ def _cache_get(job_url):
         return None, None, None
 
 
-def _cache_put(job_url, html, text):
+def _cache_put(job_url, html, text, posted_at=None):
     """Store posting in cache."""
     job_id = _job_id_from_url(job_url)
     if not job_id:
@@ -246,12 +246,60 @@ def _cache_put(job_url, html, text):
     if text:
         with open(os.path.join(cache_dir, "text.txt"), "w", encoding="utf-8") as f:
             f.write(text)
+    meta = {"url": job_url, "fetched_at": datetime.now(timezone.utc).isoformat()}
+    if posted_at:
+        meta["posted_at"] = posted_at
     with open(os.path.join(cache_dir, "meta.json"), "w") as f:
-        json.dump({"url": job_url, "fetched_at": datetime.now(timezone.utc).isoformat()}, f)
+        json.dump(meta, f)
+
+
+def parse_posted_date(html: str) -> str | None:
+    """
+    Extract original posting date from job page HTML.
+    Returns ISO date string (YYYY-MM-DD) anchored to fetch time, or None.
+    """
+    if not html:
+        return None
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 1. JSON-LD datePosted (most reliable when present)
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+            items = [data] if isinstance(data, dict) else data
+            for item in items:
+                if isinstance(item, dict) and "datePosted" in item:
+                    return item["datePosted"][:10]
+        except Exception:
+            pass
+
+    # 2. LinkedIn "Posted X days/weeks/months ago" text
+    page_text = soup.get_text()
+    for pattern, unit in [
+        (r"(?:posted|reposted)\s+(\d+)\s+hour",  "hours"),
+        (r"(?:posted|reposted)\s+(\d+)\s+day",   "days"),
+        (r"(?:posted|reposted)\s+(\d+)\s+week",  "weeks"),
+        (r"(?:posted|reposted)\s+(\d+)\s+month", "months"),
+    ]:
+        m = re.search(pattern, page_text, re.IGNORECASE)
+        if m:
+            n = int(m.group(1))
+            now = datetime.now(timezone.utc)
+            if unit == "hours":
+                dt = now - timedelta(hours=n)
+            elif unit == "days":
+                dt = now - timedelta(days=n)
+            elif unit == "weeks":
+                dt = now - timedelta(weeks=n)
+            else:
+                dt = now - timedelta(days=n * 30)
+            return dt.strftime("%Y-%m-%d")
+
+    return None
 
 
 def _parse_job_page(html):
-    """Extract description, applicant count, and repost flag from HTML."""
+    """Extract description, applicant count, repost flag, and posted date from HTML."""
     soup = BeautifulSoup(html, "html.parser")
 
     full_desc = None
@@ -285,11 +333,12 @@ def _parse_job_page(html):
             break
 
     page_repost = bool(re.search(r"reposted", html, re.IGNORECASE))
-    return full_desc, applicant_count, page_repost
+    posted_at = parse_posted_date(html)
+    return full_desc, applicant_count, page_repost, posted_at
 
 
 def fetch_full_job_details(job_url):
-    """Fetch full description and applicant count, using cache when available."""
+    """Fetch full description, applicant count, repost flag, and posted date."""
     # Check cache first
     cached_html, cached_text, _ = _cache_get(job_url)
     if cached_html:
@@ -308,15 +357,13 @@ def fetch_full_job_details(job_url):
         resp = requests.get(job_url, headers=headers, timeout=15)
         html = resp.text
 
-        full_desc, applicant_count, page_repost = _parse_job_page(html)
+        full_desc, applicant_count, page_repost, posted_at = _parse_job_page(html)
+        _cache_put(job_url, html, full_desc, posted_at=posted_at)
 
-        # Cache the result
-        _cache_put(job_url, html, full_desc)
-
-        return full_desc, applicant_count, page_repost
+        return full_desc, applicant_count, page_repost, posted_at
     except Exception as e:
         logging.warning(f"Failed to fetch job details from {job_url}: {e}")
-        return None, None, False
+        return None, None, False, None
 
 
 def quick_filter(job):
@@ -840,11 +887,14 @@ def process_jobs(jobs_df, conn, search_term="", is_intern=False, is_remote=False
             lib_score = None  # fall through to Claude
 
         # Fetch full description, applicant count, and repost flag from page HTML
-        full_desc, applicant_count, page_repost = fetch_full_job_details(job_url)
+        full_desc, applicant_count, page_repost, page_posted_at = fetch_full_job_details(job_url)
         if full_desc:
             job_dict["description"] = full_desc
         if applicant_count is not None:
             job_dict["applicants"] = applicant_count
+        # Use HTML-parsed date as fallback when jobspy didn't provide one
+        if page_posted_at and not job_dict.get("date_posted"):
+            job_dict["date_posted"] = page_posted_at
 
         repost = page_repost or detect_repost(job_dict)
         if repost:
@@ -959,7 +1009,7 @@ def _update_applicant_counts(conn):
         cached_html, _, _ = _cache_get(url)
         if not cached_html:
             continue
-        _, new_count, _ = _parse_job_page(cached_html)
+        _, new_count, _, _ = _parse_job_page(cached_html)
         if new_count is not None:
             conn.execute(
                 "UPDATE seen_jobs SET score = ? WHERE job_url = ?",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, List, MessageSquare, User, LayoutList } from "lucide-react";
+import { Briefcase, List, MessageSquare, User, LayoutList, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [

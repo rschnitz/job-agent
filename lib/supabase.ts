@@ -80,6 +80,48 @@ export function jobDisplayStatus(job: Pick<Job, "stage" | "outcome">): string {
   return job.stage ?? "new";
 }
 
+// --- Compare / pairwise ranking ---
+
+export type CompareJob = {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  snippet: string;
+  synthetic: boolean;
+};
+
+export type PairType = "real" | "probe" | "mandatory";
+export type SelectionMode = "uncertainty" | "stratified" | "probe" | "mandatory";
+export type VoteValue = "left" | "right" | "tie";
+
+export type NextPairResponse = {
+  job_left: CompareJob;
+  job_right: CompareJob;
+  job_a_id: string;
+  job_b_id: string;
+  display_left_job_id: string;
+  display_right_job_id: string;
+  pair_type: PairType;
+  selection_mode: SelectionMode;
+  comparisons_so_far: number;
+  mandatory_remaining: number;
+};
+
+export type RecordRequest = {
+  job_a_id: string;
+  job_b_id: string;
+  display_left_job_id: string;
+  display_right_job_id: string;
+  winner_fit: VoteValue;
+  winner_interest: VoteValue;
+  pair_type: PairType;
+  selection_mode: SelectionMode;
+  session_id: string;
+};
+
 export type Conversation = {
   id: string;
   job_id: string | null;

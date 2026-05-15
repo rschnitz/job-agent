@@ -1,11 +1,22 @@
 # Job Agent — Claude Code Instructions
 
+## Project Ecosystem Responsibilities
+
+Three projects form a coordinated job-search system:
+
+- **job-agent** (`~/src/job-agent/`) — **This project.** Maintains the current production system: JobSpy scraper, Supabase database, and Next.js dashboard. Source of record for raw job data and pipeline state. Keep this running and stable.
+- **RAS** (`~/Dropbox/RAS/`) — Manages actual job applications: cover letter prep, submission, recruiter follow-up, interview prep. Works with jobs sourced from job-agent or its own tools, including Discord-triggered workflows.
+- **job-search** (`~/src/job-search/`) — Coordinates the long-term refactoring of job-agent and RAS into a unified, user-agnostic system. Primary responsibility is architecture and migration, not day-to-day operations.
+
 ## Cross-project coordination
 
-This project shares scoring infrastructure with `~/Dropbox/RAS` (Ray's job search system).
+**Session start — check all three project inboxes:**
+1. job-agent inbox: `.claude/inbox/`
+2. job-search inbox: `~/src/job-search/.claude/inbox/`
+3. RAS inbox: `~/Dropbox/RAS/.claude/inbox/`
+4. Broadcast inbox: `~/.claude/inbox/`
 
-**Inbox**: Check `.claude/inbox/` at session start for messages from other Claude instances.
-**Outbox**: Write messages to `~/Dropbox/RAS/.claude/inbox/` when coordination is needed.
+Direct messages to your own inbox go to `.claude/inbox/`. To reach another project, write to its inbox or use the inbox-send tool.
 
 Related RAS capabilities: `/evaluate`, `/score-fit`, `comp_calculator.py`, `posting_cache.py`.
 
