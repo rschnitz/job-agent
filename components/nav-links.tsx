@@ -9,6 +9,7 @@ const links = [
   { href: "/", icon: Briefcase, label: "Board" },
   { href: "/jobs", icon: List, label: "Table" },
   { href: "/pipeline", icon: LayoutList, label: "Pipeline" },
+  { href: "/compare", icon: ArrowLeftRight, label: "Compare" },
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
